@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shop This Meal</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <a href="a_filter.html" class="logo">
+      <span>&#127860;</span> FarmToTable
+    </a>
+    <nav>
+      <a href="a_filter.html">Discover</a>
+      <a href="#">My Recipes</a>
+      <a href="#">Meal Lists</a>
+      <a href="#">Challenges</a>
+    </nav>
+    <div class="user-section">
+      <div class="cart-icon" style="color:#e07b39;">
+        &#128722;
+        <span class="badge" id="cartBadge">0</span>
+      </div>
+      <div class="avatar">HC</div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Breadcrumb -->
+    <div class="breadcrumb">
+      <a href="a_filter.html">Discover</a>
+      <span>&#8250;</span>
+      <a href="b_listing.html">Results</a>
+      <span>&#8250;</span>
+      <a href="#" id="recipeLink">Recipe</a>
+      <span>&#8250;</span>
+      <span>Shop This Meal</span>
+    </div>
+
+    <div class="page-header">
+      <h1>&#128722; Shop This Meal</h1>
+      <p id="shopSubtitle">Checking supplier inventory...</p>
+    </div>
+
+    <div class="shop-layout">
+
+      <!-- Left: Supplier Items -->
+      <div>
+        <div class="supplier-check" id="supplierItems">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Right: Cart Summary -->
+      <div>
+        <div class="cart-summary" id="cartSummary">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <script src="js/data.js"></script>
+  <script>
+    const EMOJI_MAP = {
+      "Atlantic Salmon Fillet": "&#127843;", "Avocado": "&#129361;", "Roma Tomato": "&#127813;",
+      "Vine Tomato": "&#127813;", "Red Onion": "&#129472;", "White Onion": "&#129472;",
+      "Lime": "&#127819;", "Lemon": "&#127819;", "Olive Oil": "&#129388;", "Garlic Cloves": "&#129476;",
+      "Fresh Cilantro": "&#127807;", "Quinoa": "&#127806;", "Chickpeas (canned)": "&#129372;",
+      "Sweet Potato": "&#127840;", "Kale": "&#129388;", "Tahini": "&#129371;",
+      "Ground Beef": "&#129385;", "Corn Tortillas": "&#127790;", "Cumin": "&#129474;",
+      "Chili Powder": "&#127798;", "Arborio Rice": "&#127834;", "Mixed Mushrooms": "&#127812;",
+      "Parmesan Cheese": "&#129472;", "White Wine": "&#127863;", "Vegetable Broth": "&#129379;",
+      "Butter": "&#129480;", "Truffle Oil": "&#129388;", "Firm Tofu": "&#129480;",
+      "Coconut Milk": "&#129380;", "Green Curry Paste": "&#129474;", "Bell Pepper": "&#127798;",
+      "Bamboo Shoots": "&#127813;", "Thai Basil": "&#127807;", "Jasmine Rice": "&#127834;",
+      "Cauliflower": "&#129388;", "Cheddar Cheese": "&#129472;", "Cream Cheese": "&#129472;",
+      "Heavy Cream": "&#129371;", "Mustard Powder": "&#129474;"
+    };
+
+    function getParams() {
+      const p = new URLSearchParams(window.location.search);
+      return { id: parseInt(p.get('id')) || 1, servings: parseInt(p.get('servings')) || 2 };
+    }
+
+    function renderShop() {
+      const { id, servings } = getParams();
+      const recipe = RECIPES.find(r => r.id === id);
+      if (!recipe) { document.body.innerHTML = '<h1>Recipe not found</h1>'; return; }
+
+      const scale = servings / recipe.baseServings;
+
+      document.getElementById('recipeLink').textContent = recipe.title;
+      document.getElementById('recipeLink').href = `c_detail.html?id=${id}`;
+      document.getElementById('shopSubtitle').textContent =
+        `Ingredients for "${recipe.title}" scaled to ${servings} people`;
+
+      let cartItems = [];
+      let substituteBanners = [];
+      let unavailableItems = [];
+      let totalPrice = 0;
+
+      const itemsHtml = recipe.ingredients.map(ing => {
+        const scaledQty = ing.qty * scale;
+        const display = scaledQty % 1 === 0 ? scaledQty : scaledQty.toFixed(1);
+        const inv = INVENTORY[ing.name];
+
+        let statusHtml = '';
+        let actualName = ing.name;
+        let actualPrice = scaledQty * ing.pricePerUnit;
+        let supplierName = '';
+        let hasSub = false;
+        let isUnavailable = false;
+
+        if (inv && inv.available) {
+          const supplier = SUPPLIERS.find(s => s.id === inv.supplierId);
+          supplierName = supplier ? supplier.name : 'Local Supplier';
+          statusHtml = `<span class="status-available">&#10003; In Stock</span>`;
+          cartItems.push({ name: ing.name, qty: display, unit: ing.unit, price: actualPrice });
+        } else if (inv && !inv.available && inv.substitute) {
+          const subInv = INVENTORY[inv.substitute];
+          const supplier = subInv ? SUPPLIERS.find(s => s.id === subInv.supplierId) : null;
+          supplierName = supplier ? supplier.name : 'Local Supplier';
+          actualName = inv.substitute;
+          statusHtml = `<span class="status-substitute">&#8635; Substituted</span>`;
+          hasSub = true;
+          cartItems.push({ name: inv.substitute, qty: display, unit: ing.unit, price: actualPrice, original: ing.name });
+        } else {
+          statusHtml = `<span class="status-unavailable">&#10007; Unavailable</span>`;
+          supplierName = 'No supplier';
+          isUnavailable = true;
+          unavailableItems.push(ing.name);
+        }
+
+        if (!isUnavailable) totalPrice += actualPrice;
+
+        return `
+          ${hasSub ? `
+          <div class="substitute-banner">
+            <span class="icon">&#9888;</span>
+            <span><strong>${ing.name}</strong> is unavailable. Substituted with <strong>${inv.substitute}</strong> based on ingredient taxonomy.</span>
+          </div>` : ''}
+          <div class="supplier-item${isUnavailable ? ' style="opacity:0.5;"' : ''}">
+            <div class="item-info">
+              <div class="item-icon">${EMOJI_MAP[actualName] || '&#127859;'}</div>
+              <div>
+                <div class="item-name">${actualName}${hasSub ? ` <span style="font-size:0.75rem;color:#e67e22;">(replaces ${ing.name})</span>` : ''}</div>
+                <div class="item-supplier">${supplierName}</div>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div class="item-qty">${display} ${ing.unit}</div>
+              ${statusHtml}
+              ${!isUnavailable ? `<div class="item-price">$${actualPrice.toFixed(2)}</div>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      document.getElementById('supplierItems').innerHTML = `
+        <div class="section-title">&#128230; Supplier Inventory Check</div>
+        ${itemsHtml}
+        ${unavailableItems.length > 0 ? `
+        <div style="background:#fdf0ef;border:1px solid #f5c6c0;border-radius:10px;padding:12px 16px;margin-top:16px;font-size:0.85rem;color:#c0392b;">
+          <strong>&#9888; Alert:</strong> ${unavailableItems.join(', ')} could not be sourced from any local supplier. Consider removing or finding alternatives.
+        </div>` : ''}
+      `;
+
+      document.getElementById('cartBadge').textContent = cartItems.length;
+
+      // Cart summary
+      const deliveryFee = 3.99;
+      const serviceFee = totalPrice * 0.05;
+      const grandTotal = totalPrice + deliveryFee + serviceFee;
+
+      document.getElementById('cartSummary').innerHTML = `
+        <h3>&#128722; Shopping Cart</h3>
+        <p style="font-size:0.82rem;color:#999;margin-bottom:16px;">${recipe.title} (${servings} servings)</p>
+        ${cartItems.map(item => `
+          <div class="cart-line">
+            <span>${item.name} (${item.qty} ${item.unit})</span>
+            <span>$${item.price.toFixed(2)}</span>
+          </div>
+        `).join('')}
+        <div class="cart-line">
+          <span>Subtotal</span>
+          <span>$${totalPrice.toFixed(2)}</span>
+        </div>
+        <div class="cart-line">
+          <span>Delivery Fee</span>
+          <span>$${deliveryFee.toFixed(2)}</span>
+        </div>
+        <div class="cart-line">
+          <span>Service Fee (5%)</span>
+          <span>$${serviceFee.toFixed(2)}</span>
+        </div>
+        <div class="cart-line total">
+          <span>Total</span>
+          <span>$${grandTotal.toFixed(2)}</span>
+        </div>
+        <a href="e_checkout.html?id=${id}&servings=${servings}&total=${grandTotal.toFixed(2)}" class="btn btn-success btn-large btn-block" style="margin-top:20px;">
+          Proceed to Checkout &#8594;
+        </a>
+        <a href="c_detail.html?id=${id}" class="btn btn-secondary btn-block" style="margin-top:8px;">
+          &#8592; Back to Recipe
+        </a>
+      `;
+    }
+
+    renderShop();
+  </script>
+
+</body>
+</html>
