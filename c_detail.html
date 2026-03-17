@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recipe Detail</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <a href="a_filter.html" class="logo">
+      <span>&#127860;</span> FarmToTable
+    </a>
+    <nav>
+      <a href="a_filter.html" class="active">Discover</a>
+      <a href="#">My Recipes</a>
+      <a href="#">Meal Lists</a>
+      <a href="#">Challenges</a>
+    </nav>
+    <div class="user-section">
+      <div class="cart-icon" onclick="window.location.href='d_shop.html'">
+        &#128722;
+        <span class="badge">0</span>
+      </div>
+      <div class="avatar">HC</div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Breadcrumb -->
+    <div class="breadcrumb">
+      <a href="a_filter.html">Discover</a>
+      <span>&#8250;</span>
+      <a href="b_listing.html">Results</a>
+      <span>&#8250;</span>
+      <span id="breadcrumbTitle">Recipe</span>
+    </div>
+
+    <!-- Hero + Info -->
+    <div class="recipe-detail" id="recipeDetail">
+      <!-- Populated by JS -->
+    </div>
+
+    <!-- Ingredients Section -->
+    <div class="ingredients-section" id="ingredientsSection">
+      <!-- Populated by JS -->
+    </div>
+
+    <!-- Steps Section -->
+    <div class="steps-section" id="stepsSection">
+      <!-- Populated by JS -->
+    </div>
+
+    <!-- Reviews Section -->
+    <div class="reviews-section" id="reviewsSection">
+      <!-- Populated by JS -->
+    </div>
+
+  </div>
+
+  <script src="js/data.js"></script>
+  <script>
+    let currentServings = 2;
+    let recipe = null;
+
+    function getRecipeId() {
+      return parseInt(new URLSearchParams(window.location.search).get('id')) || 1;
+    }
+
+    function renderStars(rating) {
+      const full = Math.floor(rating);
+      const half = rating - full >= 0.5;
+      let html = '';
+      for (let i = 0; i < full; i++) html += '&#9733;';
+      if (half) html += '&#9733;';
+      for (let i = full + (half?1:0); i < 5; i++) html += '<span class="empty">&#9733;</span>';
+      return html;
+    }
+
+    function renderDetail() {
+      recipe = RECIPES.find(r => r.id === getRecipeId());
+      if (!recipe) { document.body.innerHTML = '<h1>Recipe not found</h1>'; return; }
+
+      currentServings = recipe.baseServings;
+
+      document.title = recipe.title + ' - FarmToTable';
+      document.getElementById('breadcrumbTitle').textContent = recipe.title;
+
+      document.getElementById('recipeDetail').innerHTML = `
+        <div class="recipe-hero">${recipe.image}</div>
+        <div class="recipe-info">
+          <h1>${recipe.title}</h1>
+          <div class="meta-row">
+            <div class="meta-item"><span class="icon">&#128104;&#8205;&#127859;</span> <strong style="color:#e07b39;">${recipe.chef}</strong></div>
+            <div class="meta-item"><span class="icon">&#11088;</span> ${recipe.chefRating} chef rating</div>
+          </div>
+          <div class="meta-row">
+            <div class="meta-item"><span class="icon">&#9201;</span> ${recipe.time} minutes</div>
+            <div class="meta-item"><span class="icon">&#128200;</span> ${recipe.difficulty}</div>
+            <div class="meta-item"><span class="stars">${renderStars(recipe.rating)}</span> (${recipe.reviewCount} reviews)</div>
+          </div>
+          ${recipe.diet.length ? `<div class="meta-row">${recipe.diet.map(d => `<span class="tag">${d}</span>`).join(' ')}</div>` : ''}
+          <p class="description">${recipe.description}</p>
+
+          <!-- Serving Scaler -->
+          <div class="scaler-box">
+            <label>&#127869; Servings:</label>
+            <div class="scaler-controls">
+              <button onclick="changeServings(-1)">-</button>
+              <span class="serving-count" id="servingCount">${currentServings} people</span>
+              <button onclick="changeServings(1)">+</button>
+            </div>
+          </div>
+
+          <a href="d_shop.html?id=${recipe.id}&servings=${currentServings}" class="btn btn-primary btn-large" id="shopBtn">
+            &#128722; Shop This Meal
+          </a>
+        </div>
+      `;
+
+      renderIngredients();
+      renderSteps();
+      renderReviews();
+    }
+
+    function changeServings(delta) {
+      currentServings = Math.max(1, currentServings + delta);
+      document.getElementById('servingCount').textContent = currentServings + ' people';
+      document.getElementById('shopBtn').href = `d_shop.html?id=${recipe.id}&servings=${currentServings}`;
+      renderIngredients();
+    }
+
+    function renderIngredients() {
+      const scale = currentServings / recipe.baseServings;
+      const section = document.getElementById('ingredientsSection');
+
+      section.innerHTML = `
+        <div class="section-title">&#129367; Ingredients <span style="font-weight:400;color:#999;font-size:0.85rem;">(scaled for ${currentServings} people)</span></div>
+        <ul class="ingredient-list">
+          ${recipe.ingredients.map(ing => {
+            const scaledQty = (ing.qty * scale);
+            const display = scaledQty % 1 === 0 ? scaledQty : scaledQty.toFixed(1);
+            return `<li>
+              <span>${ing.name}</span>
+              <span class="qty">${display} ${ing.unit}</span>
+            </li>`;
+          }).join('')}
+        </ul>
+      `;
+    }
+
+    function renderSteps() {
+      document.getElementById('stepsSection').innerHTML = `
+        <div class="section-title">&#128209; Instructions</div>
+        <ol class="step-list">
+          ${recipe.steps.map(s => `<li>${s}</li>`).join('')}
+        </ol>
+      `;
+    }
+
+    function renderReviews() {
+      document.getElementById('reviewsSection').innerHTML = `
+        <div class="section-title">&#128172; User Reviews (${recipe.reviews.length})</div>
+        ${recipe.reviews.map(rev => `
+          <div class="review-card">
+            <div class="review-header">
+              <div>
+                <span class="reviewer">${rev.user}</span>
+                <span class="stars" style="margin-left:8px;">${renderStars(rev.rating)}</span>
+              </div>
+              <span class="review-date">${rev.date}</span>
+            </div>
+            <p class="review-text">${rev.text}</p>
+          </div>
+        `).join('')}
+      `;
+    }
+
+    renderDetail();
+  </script>
+
+</body>
+</html>

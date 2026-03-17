@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recipe Results</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <a href="a_filter.html" class="logo">
+      <span>&#127860;</span> FarmToTable
+    </a>
+    <nav>
+      <a href="a_filter.html" class="active">Discover</a>
+      <a href="#">My Recipes</a>
+      <a href="#">Meal Lists</a>
+      <a href="#">Challenges</a>
+    </nav>
+    <div class="user-section">
+      <div class="cart-icon" onclick="window.location.href='d_shop.html'">
+        &#128722;
+        <span class="badge">0</span>
+      </div>
+      <div class="avatar">HC</div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Breadcrumb -->
+    <div class="breadcrumb">
+      <a href="a_filter.html">Discover</a>
+      <span>&#8250;</span>
+      <span>Search Results</span>
+    </div>
+
+    <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <h1>Matching Recipes</h1>
+        <p id="resultCount">Loading...</p>
+      </div>
+      <a href="a_filter.html" class="btn btn-secondary">&#9881; Modify Filters</a>
+    </div>
+
+    <!-- Active Filters Tags -->
+    <div id="filterTags" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px;"></div>
+
+    <!-- Recipe Grid -->
+    <div class="recipe-grid" id="recipeGrid">
+      <!-- Populated by JS -->
+    </div>
+
+    <div id="noResults" style="display:none;text-align:center;padding:60px 0;">
+      <div style="font-size:4rem;margin-bottom:16px;">&#128531;</div>
+      <h2 style="color:#999;">No recipes found</h2>
+      <p style="color:#bbb;margin-bottom:24px;">Try adjusting your filters</p>
+      <a href="a_filter.html" class="btn btn-primary">Back to Filters</a>
+    </div>
+
+  </div>
+
+  <script src="js/data.js"></script>
+  <script>
+    function getParams() {
+      return Object.fromEntries(new URLSearchParams(window.location.search));
+    }
+
+    function renderStars(rating) {
+      const full = Math.floor(rating);
+      const half = rating - full >= 0.5;
+      let html = '';
+      for (let i = 0; i < full; i++) html += '&#9733;';
+      if (half) html += '&#9733;';
+      for (let i = full + (half?1:0); i < 5; i++) html += '<span class="empty">&#9733;</span>';
+      return html;
+    }
+
+    function filterRecipes() {
+      const p = getParams();
+      let results = [...RECIPES];
+
+      // Diet filter
+      if (p.diets) {
+        const diets = p.diets.split(',');
+        results = results.filter(r => diets.some(d => r.diet.includes(d)));
+      }
+
+      // Cooking time filter
+      if (p.maxTime) {
+        results = results.filter(r => r.time <= parseInt(p.maxTime));
+      }
+
+      // Ingredient filter
+      if (p.ingredient) {
+        const ing = p.ingredient.toLowerCase();
+        results = results.filter(r =>
+          r.ingredients.some(i => i.name.toLowerCase().includes(ing))
+        );
+      }
+
+      // Chef rating filter
+      if (p.minChef && parseFloat(p.minChef) > 0) {
+        results = results.filter(r => r.chefRating >= parseFloat(p.minChef));
+      }
+
+      // Difficulty filter
+      if (p.difficulty) {
+        const diffs = p.difficulty.split(',');
+        results = results.filter(r => diffs.includes(r.difficulty));
+      }
+
+      // Sort
+      const sort = p.sort || 'rating';
+      if (sort === 'rating') results.sort((a, b) => b.rating - a.rating);
+      else if (sort === 'time') results.sort((a, b) => a.time - b.time);
+      else if (sort === 'reviews') results.sort((a, b) => b.reviewCount - a.reviewCount);
+
+      return { results, params: p };
+    }
+
+    function renderFilterTags(params) {
+      const container = document.getElementById('filterTags');
+      let html = '';
+      if (params.diets) params.diets.split(',').forEach(d => {
+        html += `<span class="tag">${d}</span>`;
+      });
+      if (params.maxTime) html += `<span class="tag">&#9201; &le; ${params.maxTime} min</span>`;
+      if (params.ingredient) html += `<span class="tag">&#129367; ${params.ingredient}</span>`;
+      if (params.minChef) html += `<span class="tag">&#11088; Chef &ge; ${params.minChef}</span>`;
+      if (params.difficulty) params.difficulty.split(',').forEach(d => {
+        html += `<span class="tag">${d}</span>`;
+      });
+      container.innerHTML = html;
+    }
+
+    function render() {
+      const { results, params } = filterRecipes();
+      const grid = document.getElementById('recipeGrid');
+      const noRes = document.getElementById('noResults');
+      const count = document.getElementById('resultCount');
+
+      renderFilterTags(params);
+
+      if (results.length === 0) {
+        grid.style.display = 'none';
+        noRes.style.display = 'block';
+        count.textContent = '0 recipes found';
+        return;
+      }
+
+      count.textContent = `${results.length} recipe${results.length > 1 ? 's' : ''} found`;
+
+      grid.innerHTML = results.map(r => `
+        <a href="c_detail.html?id=${r.id}" class="recipe-card">
+          <div class="card-img">
+            ${r.image}
+            ${r.diet.length ? `<span class="diet-badge">${r.diet[0]}</span>` : ''}
+          </div>
+          <div class="card-body">
+            <h3>${r.title}</h3>
+            <div class="card-meta">
+              <span class="chef">${r.chef}</span>
+              <span>&#9201; ${r.time} min</span>
+              <span>${r.difficulty}</span>
+            </div>
+            <div class="card-footer">
+              <div class="stars">${renderStars(r.rating)} <span style="color:#999;font-size:0.78rem;">(${r.reviewCount})</span></div>
+              <span class="tag">${r.rating.toFixed(1)}</span>
+            </div>
+          </div>
+        </a>
+      `).join('');
+    }
+
+    render();
+  </script>
+
+</body>
+</html>

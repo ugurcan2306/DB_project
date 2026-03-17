@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Checkout</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <a href="a_filter.html" class="logo">
+      <span>&#127860;</span> FarmToTable
+    </a>
+    <nav>
+      <a href="a_filter.html">Discover</a>
+      <a href="#">My Recipes</a>
+      <a href="#">Meal Lists</a>
+      <a href="#">Challenges</a>
+    </nav>
+    <div class="user-section">
+      <div class="cart-icon">
+        &#128722;
+        <span class="badge">0</span>
+      </div>
+      <div class="avatar">HC</div>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Breadcrumb -->
+    <div class="breadcrumb">
+      <a href="a_filter.html">Discover</a>
+      <span>&#8250;</span>
+      <a href="#" id="recipeLink">Recipe</a>
+      <span>&#8250;</span>
+      <a href="#" id="shopLink">Shop</a>
+      <span>&#8250;</span>
+      <span>Checkout</span>
+    </div>
+
+    <div class="page-header">
+      <h1>&#128179; Checkout</h1>
+      <p>Complete your order and we'll deliver fresh ingredients to your door</p>
+    </div>
+
+    <div class="checkout-layout">
+
+      <!-- Left: Forms -->
+      <div>
+
+        <!-- Delivery Info -->
+        <div class="checkout-section">
+          <h3>&#128666; Delivery Information</h3>
+          <div class="form-row">
+            <div class="form-group">
+              <label>First Name</label>
+              <input type="text" value="John" id="firstName">
+            </div>
+            <div class="form-group">
+              <label>Last Name</label>
+              <input type="text" value="Doe" id="lastName">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group full">
+              <label>Delivery Address</label>
+              <input type="text" value="123 Main Street, Apt 4B" id="address">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>City</label>
+              <input type="text" value="Ankara" id="city">
+            </div>
+            <div class="form-group">
+              <label>Phone</label>
+              <input type="text" value="+90 555 123 4567" id="phone">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Delivery Time</label>
+              <select id="deliveryTime">
+                <option>Today, 2:00 PM - 4:00 PM</option>
+                <option>Today, 4:00 PM - 6:00 PM</option>
+                <option>Tomorrow, 10:00 AM - 12:00 PM</option>
+                <option>Tomorrow, 2:00 PM - 4:00 PM</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Delivery Notes</label>
+              <input type="text" placeholder="e.g., Ring doorbell twice">
+            </div>
+          </div>
+        </div>
+
+        <!-- Payment Method -->
+        <div class="checkout-section">
+          <h3>&#128179; Payment Method</h3>
+
+          <!-- Mock Balance -->
+          <div class="balance-box">
+            <span class="label">Your Wallet Balance</span>
+            <span class="amount" id="walletBalance">$150.00</span>
+          </div>
+
+          <div class="payment-methods">
+            <div class="payment-method active" onclick="selectPayment(this, 'wallet')">
+              <span class="pm-icon">&#128176;</span>
+              Wallet
+            </div>
+            <div class="payment-method" onclick="selectPayment(this, 'card')">
+              <span class="pm-icon">&#128179;</span>
+              Credit Card
+            </div>
+            <div class="payment-method" onclick="selectPayment(this, 'cash')">
+              <span class="pm-icon">&#128181;</span>
+              Cash on Delivery
+            </div>
+          </div>
+
+          <!-- Card details (hidden by default) -->
+          <div id="cardDetails" style="display:none;">
+            <div class="form-row">
+              <div class="form-group full">
+                <label>Card Number</label>
+                <input type="text" placeholder="1234 5678 9012 3456">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Expiry Date</label>
+                <input type="text" placeholder="MM/YY">
+              </div>
+              <div class="form-group">
+                <label>CVV</label>
+                <input type="text" placeholder="123">
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Right: Order Summary -->
+      <div>
+        <div class="order-summary" id="orderSummary">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Success Overlay -->
+  <div class="success-overlay" id="successOverlay">
+    <div class="success-card">
+      <div class="check-icon">&#9989;</div>
+      <h2>Order Confirmed!</h2>
+      <p id="successMsg">Your payment has been processed. Fresh ingredients are on the way!</p>
+      <div style="background:#f9f9f9;border-radius:10px;padding:16px;margin-bottom:20px;text-align:left;font-size:0.85rem;">
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+          <span style="color:#999;">Order ID</span>
+          <span style="font-weight:700;" id="orderId">#FTT-28491</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+          <span style="color:#999;">Amount Paid</span>
+          <span style="font-weight:700;" id="amountPaid">$0.00</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
+          <span style="color:#999;">Remaining Balance</span>
+          <span style="font-weight:700;color:#27ae60;" id="remainingBalance">$0.00</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;">
+          <span style="color:#999;">Chef Royalty Logged</span>
+          <span style="font-weight:700;color:#e07b39;" id="chefRoyalty">-</span>
+        </div>
+      </div>
+      <a href="a_filter.html" class="btn btn-primary btn-large">Discover More Recipes</a>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script>
+    let selectedPayment = 'wallet';
+
+    function getParams() {
+      const p = new URLSearchParams(window.location.search);
+      return {
+        id: parseInt(p.get('id')) || 1,
+        servings: parseInt(p.get('servings')) || 2,
+        total: parseFloat(p.get('total')) || 0
+      };
+    }
+
+    function selectPayment(el, method) {
+      document.querySelectorAll('.payment-method').forEach(pm => pm.classList.remove('active'));
+      el.classList.add('active');
+      selectedPayment = method;
+      document.getElementById('cardDetails').style.display = method === 'card' ? 'block' : 'none';
+    }
+
+    function renderOrder() {
+      const { id, servings, total } = getParams();
+      const recipe = RECIPES.find(r => r.id === id);
+      if (!recipe) return;
+
+      const scale = servings / recipe.baseServings;
+
+      document.getElementById('recipeLink').textContent = recipe.title;
+      document.getElementById('recipeLink').href = `c_detail.html?id=${id}`;
+      document.getElementById('shopLink').href = `d_shop.html?id=${id}&servings=${servings}`;
+
+      const ingredientCost = recipe.ingredients.reduce((sum, ing) => {
+        const inv = INVENTORY[ing.name];
+        if (inv && inv.available) return sum + (ing.qty * scale * ing.pricePerUnit);
+        if (inv && !inv.available && inv.substitute) return sum + (ing.qty * scale * ing.pricePerUnit);
+        return sum;
+      }, 0);
+
+      const deliveryFee = 3.99;
+      const serviceFee = ingredientCost * 0.05;
+      const grandTotal = total > 0 ? total : (ingredientCost + deliveryFee + serviceFee);
+
+      document.getElementById('orderSummary').innerHTML = `
+        <h3>&#128220; Order Summary</h3>
+        <div style="display:flex;align-items:center;gap:12px;padding:16px 0;border-bottom:1px solid #f0ebe5;margin-bottom:12px;">
+          <div style="font-size:2.5rem;">${recipe.image}</div>
+          <div>
+            <div style="font-weight:700;">${recipe.title}</div>
+            <div style="font-size:0.82rem;color:#999;">by ${recipe.chef} &middot; ${servings} servings</div>
+          </div>
+        </div>
+
+        ${recipe.ingredients.map(ing => {
+          const scaledQty = ing.qty * scale;
+          const display = scaledQty % 1 === 0 ? scaledQty : scaledQty.toFixed(1);
+          const inv = INVENTORY[ing.name];
+          const name = (inv && !inv.available && inv.substitute) ? inv.substitute : ing.name;
+          const isUnavailable = inv && !inv.available && !inv.substitute;
+          if (isUnavailable) return '';
+          return `<div class="order-item">
+            <span>${name} (${display} ${ing.unit})</span>
+            <span>$${(scaledQty * ing.pricePerUnit).toFixed(2)}</span>
+          </div>`;
+        }).join('')}
+
+        <div class="cart-line" style="margin-top:8px;">
+          <span>Delivery Fee</span>
+          <span>$${deliveryFee.toFixed(2)}</span>
+        </div>
+        <div class="cart-line">
+          <span>Service Fee</span>
+          <span>$${serviceFee.toFixed(2)}</span>
+        </div>
+        <div class="cart-line total">
+          <span>Total</span>
+          <span>$${grandTotal.toFixed(2)}</span>
+        </div>
+
+        <button class="btn btn-success btn-large btn-block" style="margin-top:24px;" onclick="confirmPayment(${grandTotal}, '${recipe.chef}')">
+          &#128274; Confirm & Pay $${grandTotal.toFixed(2)}
+        </button>
+        <a href="d_shop.html?id=${id}&servings=${servings}" class="btn btn-secondary btn-block" style="margin-top:8px;">
+          &#8592; Back to Cart
+        </a>
+      `;
+    }
+
+    function confirmPayment(amount, chefName) {
+      // Mock payment processing
+      if (selectedPayment === 'wallet' && USER_BALANCE < amount) {
+        alert('Insufficient wallet balance! Please choose another payment method.');
+        return;
+      }
+
+      const newBalance = selectedPayment === 'wallet' ? (USER_BALANCE - amount) : USER_BALANCE;
+      const royalty = (amount * 0.10).toFixed(2); // 10% royalty to chef
+
+      // Show success
+      document.getElementById('amountPaid').textContent = '$' + amount.toFixed(2);
+      document.getElementById('remainingBalance').textContent = '$' + newBalance.toFixed(2);
+      document.getElementById('chefRoyalty').textContent = '$' + royalty + ' to ' + chefName;
+      document.getElementById('orderId').textContent = '#FTT-' + Math.floor(10000 + Math.random() * 90000);
+
+      if (selectedPayment === 'wallet') {
+        document.getElementById('successMsg').textContent =
+          `$${amount.toFixed(2)} deducted from your wallet. Stock updated. Chef royalty recorded. Fresh ingredients on the way!`;
+      } else if (selectedPayment === 'card') {
+        document.getElementById('successMsg').textContent =
+          `Card payment of $${amount.toFixed(2)} processed. Stock updated. Chef royalty recorded. Delivery scheduled!`;
+      } else {
+        document.getElementById('successMsg').textContent =
+          `Order placed! Pay $${amount.toFixed(2)} cash on delivery. Stock reserved. Chef royalty will be recorded upon delivery.`;
+      }
+
+      document.getElementById('successOverlay').classList.add('show');
+    }
+
+    renderOrder();
+  </script>
+
+</body>
+</html>

@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recipe Discovery - Filter</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <a href="a_filter.html" class="logo">
+      <span>&#127860;</span> FarmToTable
+    </a>
+    <nav>
+      <a href="a_filter.html" class="active">Discover</a>
+      <a href="#">My Recipes</a>
+      <a href="#">Meal Lists</a>
+      <a href="#">Challenges</a>
+    </nav>
+    <div class="user-section">
+      <div class="cart-icon" onclick="window.location.href='d_shop.html'">
+        &#128722;
+        <span class="badge">0</span>
+      </div>
+      <div class="avatar">HC</div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <div class="container">
+
+    <div class="page-header">
+      <h1>Discover Recipes</h1>
+      <p>Find the perfect recipe by filtering based on your preferences</p>
+    </div>
+
+    <div class="filter-section">
+
+      <!-- Dietary Restrictions -->
+      <div class="filter-grid">
+        <div class="filter-group">
+          <label>Dietary Restrictions</label>
+          <div class="chip-group" id="dietChips">
+            <span class="chip" data-value="Keto" onclick="toggleChip(this)">&#129361; Keto</span>
+            <span class="chip" data-value="Vegan" onclick="toggleChip(this)">&#127793; Vegan</span>
+            <span class="chip" data-value="Vegetarian" onclick="toggleChip(this)">&#129388; Vegetarian</span>
+            <span class="chip" data-value="Gluten-Free" onclick="toggleChip(this)">&#127854; Gluten-Free</span>
+            <span class="chip" data-value="Dairy-Free" onclick="toggleChip(this)">&#129371; Dairy-Free</span>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>Cooking Time (max minutes)</label>
+          <input type="range" id="cookingTime" min="10" max="120" value="60" oninput="updateTimeLabel(this.value)">
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem;color:#999;margin-top:4px;">
+            <span>10 min</span>
+            <span id="timeLabel" style="font-weight:700;color:#e07b39;">60 min</span>
+            <span>120 min</span>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>Ingredients (search)</label>
+          <input type="text" id="ingredientSearch" placeholder="e.g. salmon, avocado, tofu...">
+        </div>
+
+        <div class="filter-group">
+          <label>Minimum Chef Rating</label>
+          <select id="chefRating">
+            <option value="0">Any Rating</option>
+            <option value="4">&#11088; 4.0 and above</option>
+            <option value="4.5">&#11088; 4.5 and above</option>
+            <option value="4.8">&#11088; 4.8 and above</option>
+          </select>
+        </div>
+
+        <div class="filter-group">
+          <label>Difficulty</label>
+          <div class="chip-group" id="difficultyChips">
+            <span class="chip" data-value="Easy" onclick="toggleChip(this)">Easy</span>
+            <span class="chip" data-value="Medium" onclick="toggleChip(this)">Medium</span>
+            <span class="chip" data-value="Hard" onclick="toggleChip(this)">Hard</span>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>Sort By</label>
+          <select id="sortBy">
+            <option value="rating">Highest Rated</option>
+            <option value="time">Quickest First</option>
+            <option value="reviews">Most Reviewed</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="filter-actions">
+        <button class="btn btn-secondary" onclick="resetFilters()">Clear All</button>
+        <button class="btn btn-primary" onclick="applyFilters()">
+          &#128269; Search Recipes
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Active Filters Display -->
+    <div id="activeFilters" style="margin-top:20px;display:flex;gap:8px;flex-wrap:wrap;"></div>
+
+  </div>
+
+  <script src="js/data.js"></script>
+  <script>
+    function toggleChip(el) {
+      el.classList.toggle('active');
+    }
+
+    function updateTimeLabel(val) {
+      document.getElementById('timeLabel').textContent = val + ' min';
+    }
+
+    function resetFilters() {
+      document.querySelectorAll('.chip.active').forEach(c => c.classList.remove('active'));
+      document.getElementById('cookingTime').value = 60;
+      document.getElementById('timeLabel').textContent = '60 min';
+      document.getElementById('ingredientSearch').value = '';
+      document.getElementById('chefRating').value = '0';
+      document.getElementById('sortBy').value = 'rating';
+      document.getElementById('activeFilters').innerHTML = '';
+    }
+
+    function applyFilters() {
+      const selectedDiets = [...document.querySelectorAll('#dietChips .chip.active')].map(c => c.dataset.value);
+      const maxTime = parseInt(document.getElementById('cookingTime').value);
+      const ingredient = document.getElementById('ingredientSearch').value.trim().toLowerCase();
+      const minChefRating = parseFloat(document.getElementById('chefRating').value);
+      const selectedDiffs = [...document.querySelectorAll('#difficultyChips .chip.active')].map(c => c.dataset.value);
+      const sortBy = document.getElementById('sortBy').value;
+
+      // Build query params
+      const params = new URLSearchParams();
+      if (selectedDiets.length) params.set('diets', selectedDiets.join(','));
+      if (maxTime !== 120) params.set('maxTime', maxTime);
+      if (ingredient) params.set('ingredient', ingredient);
+      if (minChefRating > 0) params.set('minChef', minChefRating);
+      if (selectedDiffs.length) params.set('difficulty', selectedDiffs.join(','));
+      params.set('sort', sortBy);
+
+      window.location.href = 'b_listing.html?' + params.toString();
+    }
+  </script>
+
+</body>
+</html>
