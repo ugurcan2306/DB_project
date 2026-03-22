@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - FarmToTable</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    /* Add specific auth overrides here if needed, otherwise use baseline */
+  </style>
+</head>
+
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <a href="a_filter.html" class="logo">
+      <span>&#127860;</span> FarmToTable
+    </a>
+    <nav>
+      <a href="a_filter.html">Discover</a>
+      <a href="login.html" class="active">Login</a>
+      <a href="register.html">Register</a>
+    </nav>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <div class="container"
+    style="max-width: 500px; min-height: calc(100vh - 64px); display: flex; align-items: center; justify-content: center;">
+    <div class="filter-section" style="width: 100%; padding: 40px;">
+
+      <div class="page-header" style="text-align: center; margin-bottom: 30px;">
+        <h1>Login to FarmToTable<span>&#127860;</span> </h1>
+        <p>Welcome back! Please enter your details.</p>
+      </div>
+
+      <form action="a_filter.html" method="GET">
+        <div class="form-group full" style="margin-bottom: 20px;">
+          <label for="email">Username or Email</label>
+          <input type="text" id="email" required placeholder="Enter your email or username">
+        </div>
+
+        <div class="form-group full" style="margin-bottom: 24px;">
+          <label for="password">Password</label>
+          <input type="password" id="password" required placeholder="Enter your password">
+        </div>
+
+        <button type="submit" class="btn btn-primary btn-block btn-large">Login</button>
+
+        <div style="text-align: center; margin: 20px 0; color: #999; font-size: 0.9rem;">
+          &mdash; OR &mdash;
+        </div>
+
+        <!-- Google Auth Option -->
+        <button type="button" class="btn btn-secondary btn-block btn-large"
+          style="display: flex; justify-content: center; gap: 10px;">
+          <span style="font-size: 1.2rem;">&#71;</span> Login with Google
+        </button>
+
+        <div style="text-align: center; margin-top: 24px; font-size: 0.9rem; color: #666;">
+          Don't have an account? <a href="register.html" style="color: #e07b39; font-weight: 600;">Register here</a>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+</body>
+
+</html>

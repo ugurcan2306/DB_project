@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Register - FarmToTable</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <a href="a_filter.html" class="logo">
+      <span>&#127860;</span> FarmToTable
+    </a>
+    <nav>
+      <a href="a_filter.html">Discover</a>
+      <a href="login.html">Login</a>
+      <a href="register.html" class="active">Register</a>
+    </nav>
+  </header>
+
+  <!-- MAIN CONTENT -->
+  <div class="container"
+    style="max-width: 600px; min-height: calc(100vh - 64px); display: flex; align-items: center; justify-content: center;">
+    <div class="filter-section" style="width: 100%; padding: 40px;">
+
+      <div class="page-header" style="text-align: center; margin-bottom: 30px;">
+        <h1>Create an Account</h1>
+        <p>Join FarmToTable<span>&#127860;</span> as a Home Cook, Chef, or Supplier</p>
+      </div>
+
+      <form action="login.html" method="GET">
+
+        <!-- GENERIC USER FIELDS -->
+        <div class="form-row">
+          <div class="form-group">
+            <label for="name">Full Name</label>
+            <input type="text" id="name" required placeholder="e.g. John Doe">
+          </div>
+          <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" required placeholder="user@example.com">
+          </div>
+        </div>
+
+        <div class="form-group full" style="margin-bottom: 20px;">
+          <label for="password">Password</label>
+          <input type="password" id="password" required placeholder="Create a password">
+        </div>
+
+        <div class="form-group full" style="margin-bottom: 24px;">
+          <label>Register As</label>
+          <div class="chip-group" id="userTypeChips" style="display: flex; gap: 10px;">
+            <div class="chip active" data-value="home_cook" onclick="selectRole(this)"
+              style="flex: 1; text-align: center; padding: 12px; font-size: 0.95rem;">&#127859; Home Cook</div>
+            <div class="chip" data-value="verified_chef" onclick="selectRole(this)"
+              style="flex: 1; text-align: center; padding: 12px; font-size: 0.95rem;">&#128104;&#8205;&#127859; Chef
+            </div>
+            <div class="chip" data-value="supplier" onclick="selectRole(this)"
+              style="flex: 1; text-align: center; padding: 12px; font-size: 0.95rem;">&#128666; Supplier</div>
+          </div>
+          <input type="hidden" id="userType" value="home_cook">
+        </div>
+
+        <!-- DYNAMIC FIELDS BASED ON ROLE -->
+        <!-- Home Cook Form -->
+        <div id="homeCookFields" style="display: block;">
+          <div class="form-group full" style="margin-bottom: 16px;">
+            <label for="hcAddress">Delivery Address</label>
+            <input type="text" id="hcAddress" placeholder="e.g. Bilkent, Ankara">
+          </div>
+        </div>
+
+        <!-- Supplier Form -->
+        <div id="supplierFields" style="display: none;">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="businessName">Business Name</label>
+              <input type="text" id="businessName" placeholder="Enter Business Name">
+            </div>
+            <div class="form-group">
+              <label for="supAddress">Business Address</label>
+              <input type="text" id="supAddress" placeholder="e.g. Bilkent, Ankara">
+            </div>
+          </div>
+        </div>
+
+        <!-- Verified Chef Form -->
+        <div id="chefFields" style="display: none;">
+          <div class="substitute-banner" style="margin-bottom: 16px; justify-content: center;">
+            <span class="icon">&#10024;</span>
+            <span>Welcome, Chef! No extra details required here.</span>
+          </div>
+        </div>
+
+        <!-- SUBMIT & EXTERNAL AUTH -->
+        <button type="submit" class="btn btn-primary btn-block btn-large" style="margin-top: 20px;">Register</button>
+
+        <div style="text-align: center; margin: 20px 0; color: #999; font-size: 0.9rem;">
+          &mdash; OR &mdash;
+        </div>
+
+        <!-- Google Auth Option -->
+        <button type="button" class="btn btn-secondary btn-block btn-large"
+          style="display: flex; justify-content: center; gap: 10px;">
+          <span style="font-size: 1.2rem;">&#71;</span> Register with Google
+        </button>
+
+        <div style="text-align: center; margin-top: 24px; font-size: 0.9rem; color: #666;">
+          Already have an account? <a href="login.html" style="color: #e07b39; font-weight: 600;">Login here</a>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+  <script>
+    function toggleDynamicFields() {
+      const userType = document.getElementById('userType').value;
+
+      // Hide all dynamic field sections
+      document.getElementById('homeCookFields').style.display = 'none';
+      document.getElementById('supplierFields').style.display = 'none';
+      document.getElementById('chefFields').style.display = 'none';
+
+      // Show the relevant section based on the user type selection
+      if (userType === 'home_cook') {
+        document.getElementById('homeCookFields').style.display = 'block';
+      } else if (userType === 'supplier') {
+        document.getElementById('supplierFields').style.display = 'block';
+      } else if (userType === 'verified_chef') {
+        document.getElementById('chefFields').style.display = 'block';
+      }
+    }
+
+    function selectRole(element) {
+      // Remove active class from all chips
+      document.querySelectorAll('#userTypeChips .chip').forEach(chip => {
+        chip.classList.remove('active');
+      });
+
+      // Add active class to clicked
+      element.classList.add('active');
+
+      // Update hidden input value
+      document.getElementById('userType').value = element.getAttribute('data-value');
+
+      // Trigger dynamic fields logic
+      toggleDynamicFields();
+    }
+  </script>
+
+</body>
+
+</html>
