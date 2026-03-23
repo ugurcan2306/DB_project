@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Profile</title>
+  <link rel="stylesheet" href="../css/style.css">
+  <style>
+    /* Prevent flicker of elements */
+    [style*="display: none"] { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <a href="a_filter.html" class="logo">
+      <span>&#127860;</span> FarmToTable
+    </a>
+    <nav>
+      <a href="a_filter.html">Discover</a>
+      <a href="#">My Recipes</a>
+      <a href="#">Meal Lists</a>
+      <a href="#">Challenges</a>
+    </nav>
+    <div class="user-section">
+      <div class="notification-icon" onclick="toggleNotifications(event)">
+        &#128276;
+        <span class="badge" id="notifBadge">2</span>
+        <div class="notification-dropdown" id="notifDropdown" style="display:none;" onclick="event.stopPropagation()">
+          <div class="notif-header">Notifications</div>
+          <div class="notif-item unread" onclick="readNotif(this)">
+            <strong>Chef Emily</strong> added a new recipe: <em>Garlic Butter Salmon</em>
+            <div class="time">2 hours ago</div>
+          </div>
+          <div class="notif-item" onclick="readNotif(this)">
+            <strong>Chef Marcus</strong> posted: <em>Vegan Tacos</em>
+            <div class="time">1 day ago</div>
+          </div>
+        </div>
+      </div>
+      <div class="cart-icon" onclick="window.location.href='d_shop.html'">
+        &#128722;
+        <span class="badge">0</span>
+      </div>
+      <a href="f_profile.html" class="avatar">HC</a>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Profile Header -->
+    <div class="profile-header">
+      <div class="profile-avatar">&#128104;&#8205;&#127859;</div>
+      <div class="profile-info">
+        <h1>Chef Marcus</h1>
+        <div class="handle">@marcus_cooks</div>
+        <div class="bio">
+          Passionate about plant-based meals and farm-to-table sustainability. 
+          I love creating simple, delicious, and healthy recipes for everyone to enjoy. 
+          Author of "The Green Kitchen".
+        </div>
+        <div class="profile-stats">
+          <div class="stat-box">
+            <span class="count">42</span>
+            <span class="label">Recipes</span>
+          </div>
+          <div class="stat-box">
+            <span class="count" id="followerCount">12.5k</span>
+            <span class="label">Followers</span>
+          </div>
+          <div class="stat-box">
+            <span class="count">142</span>
+            <span class="label">Following</span>
+          </div>
+        </div>
+      </div>
+      <div class="profile-actions">
+        <button id="followBtn" class="btn btn-primary btn-block" onclick="toggleFollow()">Follow</button>
+        <button class="btn btn-secondary btn-block">Message</button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('recipes', this)">Recipes</div>
+      <div class="tab" onclick="switchTab('following', this)">Following</div>
+      <div class="tab">Collections</div>
+      <div class="tab">About</div>
+    </div>
+
+    <!-- Recipe Grid (Reused) -->
+    <div class="recipe-grid" id="recipeGrid">
+      <!-- Will be populated by JS -->
+    </div>
+
+    <div class="following-list" id="followingList" style="display:none;">
+      <!-- Populated by JS -->
+    </div>
+
+  </div>
+
+  <script src="../js/data.js"></script>
+  <script>
+    // Follow logic
+    let isFollowing = false;
+    function toggleFollow() {
+      const btn = document.getElementById('followBtn');
+      const countEl = document.getElementById('followerCount');
+      
+      isFollowing = !isFollowing;
+      
+      if (isFollowing) {
+        btn.textContent = 'following';
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary');
+        countEl.textContent = '12.5k+1'; // Dummy update
+      } else {
+        btn.textContent = 'Follow';
+        btn.classList.add('btn-primary');
+        btn.classList.remove('btn-secondary');
+        countEl.textContent = '12.5k';
+      }
+    }
+
+    // Notifications logic
+    function toggleNotifications(e) {
+      e.stopPropagation();
+      const dropdown = document.getElementById('notifDropdown');
+      if (dropdown.style.display === 'none' || dropdown.style.display === '') {
+        dropdown.style.display = 'block';
+      } else {
+        dropdown.style.display = 'none';
+      }
+    }
+
+    function readNotif(el) {
+      el.classList.remove('unread');
+      updateBadge();
+    }
+
+    function updateBadge() {
+      const unreads = document.querySelectorAll('.notif-item.unread').length;
+      const badge = document.getElementById('notifBadge');
+      if (unreads === 0) {
+        badge.style.display = 'none';
+      } else {
+        badge.style.display = 'flex';
+        badge.textContent = unreads;
+      }
+    }
+
+    // Close dropdown on outside click
+    window.addEventListener('click', () => {
+      document.getElementById('notifDropdown').style.display = 'none';
+    });
+
+    // Populate Recipes
+    function renderStars(rating) {
+      const full = Math.floor(rating);
+      const half = rating - full >= 0.5;
+      let html = '';
+      for (let i = 0; i < full; i++) html += '&#9733;';
+      if (half) html += '&#9733;';
+      for (let i = full + (half?1:0); i < 5; i++) html += '<span class="empty">&#9733;</span>';
+      return html;
+    }
+
+    function renderRecipes() {
+      // Just take the first 3 recipes as Marcus's recipes
+      const results = RECIPES.slice(0, 3);
+      const grid = document.getElementById('recipeGrid');
+
+      grid.innerHTML = results.map(r => `
+        <a href="c_detail.html?id=${r.id}" class="recipe-card">
+          <div class="card-img">
+            ${r.image}
+            ${r.diet.length ? `<span class="diet-badge">${r.diet[0]}</span>` : ''}
+          </div>
+          <div class="card-body">
+            <h3>${r.title}</h3>
+            <div class="card-meta">
+              <span class="chef">${r.chef}</span>
+              <span>&#9201; ${r.time} min</span>
+              <span>${r.difficulty}</span>
+            </div>
+            <div class="card-footer">
+              <div class="stars">${renderStars(r.rating)} <span style="color:#999;font-size:0.78rem;">(${r.reviewCount})</span></div>
+              <span class="tag">${r.rating.toFixed(1)}</span>
+            </div>
+          </div>
+        </a>
+      `).join('');
+    }
+
+    function switchTab(tabId, el) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      
+      document.getElementById('recipeGrid').style.display = 'none';
+      document.getElementById('followingList').style.display = 'none';
+
+      if (tabId === 'recipes') {
+        document.getElementById('recipeGrid').style.display = 'grid';
+      } else if (tabId === 'following') {
+        document.getElementById('followingList').style.display = 'flex';
+      }
+    }
+
+    function renderFollowing() {
+      const mockFollowing = [
+        { name: "Chef Emily", handle: "@emily_bakes", emoji: "&#128105;&#8205;&#127859;" },
+        { name: "Farm Fresh Co.", handle: "@farmfresh", emoji: "&#128668;" },
+        { name: "Liam Taste", handle: "@liamtastes", emoji: "&#128104;&#8205;&#127859;" }
+      ];
+      const list = document.getElementById('followingList');
+      list.innerHTML = mockFollowing.map(f => `
+        <div class="following-card">
+          <div class="following-info">
+            <div class="following-avatar">${f.emoji}</div>
+            <div class="following-details">
+              <h3>${f.name}</h3>
+              <p>${f.handle}</p>
+            </div>
+          </div>
+          <button class="btn btn-secondary" style="padding: 6px 16px; font-size: 0.85rem;" onclick="this.textContent = this.textContent === 'Following' ? 'Follow' : 'Following'; this.classList.toggle('btn-primary'); this.classList.toggle('btn-secondary');">Following</button>
+        </div>
+      `).join('');
+    }
+
+    renderRecipes();
+    renderFollowing();
+  </script>
+</body>
+</html>

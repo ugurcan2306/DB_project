@@ -277,3 +277,42 @@ const INVENTORY = {
 
 // Mock user balance
 let USER_BALANCE = 150.00;
+
+// Global Notification Logic
+function toggleNotifications(e) {
+  e.stopPropagation();
+  const dropdown = document.getElementById('notifDropdown');
+  if (dropdown) {
+    if (dropdown.style.display === 'none' || dropdown.style.display === '') {
+      dropdown.style.display = 'block';
+    } else {
+      dropdown.style.display = 'none';
+    }
+  }
+}
+
+function readNotif(el) {
+  el.classList.remove('unread');
+  updateNotifBadge();
+}
+
+function updateNotifBadge() {
+  const unreads = document.querySelectorAll('.notif-item.unread').length;
+  const badge = document.getElementById('notifBadge');
+  if (badge) {
+    if (unreads === 0) {
+      badge.style.display = 'none';
+    } else {
+      badge.style.display = 'flex';
+      badge.textContent = unreads;
+    }
+  }
+}
+
+// Close dropdown on outside click
+if (typeof window !== 'undefined') {
+  window.addEventListener('click', () => {
+    const dropdown = document.getElementById('notifDropdown');
+    if (dropdown) dropdown.style.display = 'none';
+  });
+}

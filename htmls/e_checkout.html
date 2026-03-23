@@ -20,11 +20,26 @@
       <a href="#">Challenges</a>
     </nav>
     <div class="user-section">
+      <div class="notification-icon" onclick="toggleNotifications(event)">
+        &#128276;
+        <span class="badge" id="notifBadge">2</span>
+        <div class="notification-dropdown" id="notifDropdown" style="display:none;" onclick="event.stopPropagation()">
+          <div class="notif-header">Notifications</div>
+          <div class="notif-item unread" onclick="readNotif(this)">
+            <strong>Chef Emily</strong> added a new recipe: <em>Garlic Butter Salmon</em>
+            <div class="time">2 hours ago</div>
+          </div>
+          <div class="notif-item" onclick="readNotif(this)">
+            <strong>Chef Marcus</strong> posted: <em>Vegan Tacos</em>
+            <div class="time">1 day ago</div>
+          </div>
+        </div>
+      </div>
       <div class="cart-icon">
         &#128722;
         <span class="badge">0</span>
       </div>
-      <div class="avatar">HC</div>
+      <a href="f_profile.html" class="avatar">HC</a>
     </div>
   </header>
 
