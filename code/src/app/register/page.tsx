@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { REGISTERABLE_USER_ROLES, type RegisterableUserRole } from "@/types/user";
+import { AppNavbar } from "@/components/app-navbar";
 
 const ROLE_LABELS: Record<RegisterableUserRole, string> = {
   home_cook: "Home Cook",
@@ -53,18 +54,7 @@ export default function RegisterPage() {
 
   return (
     <>
-      <header className="navbar">
-        <Link href="/" className="logo">
-          <span>🍴</span> FarmToTable
-        </Link>
-        <nav>
-          <Link href="/">Discover</Link>
-          <Link href="/login">Login</Link>
-          <Link href="/register" className="active">
-            Register
-          </Link>
-        </nav>
-      </header>
+      <AppNavbar activePath="register" />
 
       <div className="container auth-wrap">
         <div className="filter-section auth-card register-card">

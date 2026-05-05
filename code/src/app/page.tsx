@@ -1,25 +1,27 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { getUserProfile } from "@/lib/profile";
+import { AppNavbar } from "@/components/app-navbar";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);
+  const profile = session?.user ? await getUserProfile(session.user.id) : null;
 
   return (
     <>
-      <header className="navbar">
-        <Link href="/" className="logo">
-          <span>🍴</span> FarmToTable
-        </Link>
-        <nav>
-          <Link href="/" className="active">
-            Discover
-          </Link>
-          {session?.user ? <Link href="/dashboard">Dashboard</Link> : null}
-          {!session?.user ? <Link href="/login">Login</Link> : null}
-          {!session?.user ? <Link href="/register">Register</Link> : null}
-        </nav>
-      </header>
+      <AppNavbar
+        activePath="discover"
+        user={
+          session?.user && profile
+            ? {
+                name: profile.fullName,
+                role: profile.role,
+                avatarUrl: profile.avatarUrl,
+              }
+            : null
+        }
+      />
 
       <main className="container">
         <section className="filter-section">
@@ -31,6 +33,11 @@ export default async function Home() {
             <Link href="/dashboard" className="btn btn-primary">
               Open Dashboard
             </Link>
+            {session?.user?.role === "local_supplier" ? (
+              <Link href="/supplier" className="btn btn-secondary">
+                Open Supplier Portal
+              </Link>
+            ) : null}
             {!session?.user ? (
               <Link href="/login" className="btn btn-secondary">
                 Go to Login

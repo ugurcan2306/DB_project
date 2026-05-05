@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { AppNavbar } from "@/components/app-navbar";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -37,18 +38,7 @@ export default function LoginPage() {
 
   return (
     <>
-      <header className="navbar">
-        <Link href="/" className="logo">
-          <span>🍴</span> FarmToTable
-        </Link>
-        <nav>
-          <Link href="/">Discover</Link>
-          <Link href="/login" className="active">
-            Login
-          </Link>
-          <Link href="/register">Register</Link>
-        </nav>
-      </header>
+      <AppNavbar activePath="login" />
 
       <div className="container auth-wrap">
         <div className="filter-section auth-card">
@@ -59,7 +49,7 @@ export default function LoginPage() {
 
           <form onSubmit={onSubmit}>
             <div className="form-group full auth-field">
-              <label htmlFor="email">Username or Email</label>
+              <label htmlFor="email">Email</label>
               <input
                 type="email"
                 id="email"
