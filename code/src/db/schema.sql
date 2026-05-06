@@ -158,3 +158,143 @@ CREATE TABLE IF NOT EXISTS recipe_ingredients (
   unit VARCHAR(40) NOT NULL DEFAULT 'unit',
   UNIQUE (recipe_id, ingredient_id)
 );
+
+-- =========================================================
+-- Kitchen Challenge Participation (Phase 2 - Feature 4)
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS badges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  badge_name VARCHAR(120) NOT NULL UNIQUE,
+  badge_emoji VARCHAR(16) NOT NULL DEFAULT '🏅',
+  description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS challenges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title VARCHAR(160) NOT NULL,
+  description TEXT NOT NULL,
+  emoji VARCHAR(16) NOT NULL DEFAULT '🏆',
+  starts_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ends_at TIMESTAMPTZ NOT NULL,
+  target_count INT NOT NULL CHECK (target_count > 0),
+  required_tag VARCHAR(60),
+  required_ingredient_id UUID REFERENCES ingredients(id) ON DELETE SET NULL,
+  reward_badge_id UUID REFERENCES badges(id) ON DELETE SET NULL,
+  reward_points INT NOT NULL DEFAULT 100 CHECK (reward_points >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (ends_at > starts_at)
+);
+
+CREATE TABLE IF NOT EXISTS user_challenge_participation (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  challenge_id UUID NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+  progress_count INT NOT NULL DEFAULT 0 CHECK (progress_count >= 0),
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  UNIQUE (user_id, challenge_id)
+);
+
+CREATE TABLE IF NOT EXISTS user_badges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  badge_id UUID NOT NULL REFERENCES badges(id) ON DELETE CASCADE,
+  challenge_id UUID REFERENCES challenges(id) ON DELETE SET NULL,
+  earned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, badge_id)
+);
+
+CREATE TABLE IF NOT EXISTS challenge_recipe_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  challenge_id UUID NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+  recipe_title VARCHAR(200) NOT NULL,
+  tags TEXT,
+  ingredients TEXT,
+  logged_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Trigger: when participation progress meets target, mark completed
+-- and award the challenge's reward badge to the user.
+CREATE OR REPLACE FUNCTION trg_award_badge_on_completion()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_target INT;
+  v_badge UUID;
+BEGIN
+  SELECT target_count, reward_badge_id INTO v_target, v_badge
+  FROM challenges WHERE id = NEW.challenge_id;
+
+  IF NEW.progress_count >= v_target AND NEW.completed_at IS NULL THEN
+    NEW.completed_at := NOW();
+    IF v_badge IS NOT NULL THEN
+      INSERT INTO user_badges (user_id, badge_id, challenge_id)
+      VALUES (NEW.user_id, v_badge, NEW.challenge_id)
+      ON CONFLICT (user_id, badge_id) DO NOTHING;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_award_badge ON user_challenge_participation;
+CREATE TRIGGER trg_award_badge
+BEFORE UPDATE OF progress_count ON user_challenge_participation
+FOR EACH ROW EXECUTE FUNCTION trg_award_badge_on_completion();
+
+-- View: leaderboard aggregating completions, badges and points per user
+CREATE OR REPLACE VIEW challenge_leaderboard AS
+SELECT
+  u.id AS user_id,
+  u.full_name,
+  u.avatar_url,
+  COUNT(DISTINCT ucp.challenge_id) FILTER (WHERE ucp.completed_at IS NOT NULL) AS challenges_completed,
+  COUNT(DISTINCT ub.badge_id) AS badges_earned,
+  COALESCE(SUM(c.reward_points) FILTER (WHERE ucp.completed_at IS NOT NULL), 0) AS total_points
+FROM users u
+LEFT JOIN user_challenge_participation ucp ON ucp.user_id = u.id
+LEFT JOIN challenges c ON c.id = ucp.challenge_id
+LEFT JOIN user_badges ub ON ub.user_id = u.id
+GROUP BY u.id, u.full_name, u.avatar_url;
+
+-- Seed a few badges and challenges (idempotent)
+INSERT INTO badges (badge_name, badge_emoji, description) VALUES
+  ('Vegan Pro', '🌱', 'Completed a vegan-themed challenge'),
+  ('Spice King', '🌶️', 'Completed a spicy-cuisine challenge'),
+  ('Sustainability Star', '🌿', 'Used local & sustainable ingredients'),
+  ('Speed Cook', '⚡', 'Completed a fast-cooking challenge'),
+  ('Zero Waste Hero', '♻️', 'Completed the Zero Waste Week challenge')
+ON CONFLICT (badge_name) DO NOTHING;
+
+INSERT INTO challenges (title, description, emoji, ends_at, target_count, required_tag, reward_badge_id, reward_points)
+SELECT 'Vegan Week', 'Cook and log 3 different vegan recipes in 7 days.', '🥗',
+       NOW() + INTERVAL '7 days', 3, 'vegan',
+       (SELECT id FROM badges WHERE badge_name = 'Vegan Pro'), 300
+WHERE NOT EXISTS (SELECT 1 FROM challenges WHERE title = 'Vegan Week');
+
+INSERT INTO challenges (title, description, emoji, ends_at, target_count, required_tag, reward_badge_id, reward_points)
+SELECT 'Spice It Up', 'Master 2 spicy dishes from any cuisine.', '🔥',
+       NOW() + INTERVAL '5 days', 2, 'spicy',
+       (SELECT id FROM badges WHERE badge_name = 'Spice King'), 200
+WHERE NOT EXISTS (SELECT 1 FROM challenges WHERE title = 'Spice It Up');
+
+INSERT INTO challenges (title, description, emoji, ends_at, target_count, required_tag, reward_badge_id, reward_points)
+SELECT 'Zero Waste Week', 'Log 3 recipes that reuse leftovers or scraps.', '♻️',
+       NOW() + INTERVAL '7 days', 3, 'zero-waste',
+       (SELECT id FROM badges WHERE badge_name = 'Zero Waste Hero'), 350
+WHERE NOT EXISTS (SELECT 1 FROM challenges WHERE title = 'Zero Waste Week');
+
+INSERT INTO challenges (title, description, emoji, ends_at, target_count, required_tag, reward_badge_id, reward_points)
+SELECT 'Local Roots Challenge', 'Use at least 5 locally-sourced ingredients in one recipe.', '🌾',
+       NOW() + INTERVAL '10 days', 1, 'local',
+       (SELECT id FROM badges WHERE badge_name = 'Sustainability Star'), 250
+WHERE NOT EXISTS (SELECT 1 FROM challenges WHERE title = 'Local Roots Challenge');
+
+INSERT INTO challenges (title, description, emoji, ends_at, target_count, required_tag, reward_badge_id, reward_points)
+SELECT 'Under 20 Minutes', 'Submit 2 recipes with prep + cook under 20 minutes.', '⏱️',
+       NOW() + INTERVAL '6 days', 2, 'quick',
+       (SELECT id FROM badges WHERE badge_name = 'Speed Cook'), 200
+WHERE NOT EXISTS (SELECT 1 FROM challenges WHERE title = 'Under 20 Minutes');
