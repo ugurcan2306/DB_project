@@ -101,3 +101,18 @@ CREATE TABLE IF NOT EXISTS supplier_order_items (
   price_per_unit NUMERIC(10,2) NOT NULL CHECK (price_per_unit >= 0),
   line_total NUMERIC(12,2) NOT NULL CHECK (line_total >= 0)
 );
+
+-- Taxonomy: map specific ingredient names to a canonical ingredient
+-- e.g. "Roma Tomato" -> ingredient_id for "Tomato"
+CREATE TABLE IF NOT EXISTS ingredient_aliases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  alias_name VARCHAR(160) NOT NULL UNIQUE,
+  canonical_ingredient_id UUID NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- User management: soft-disable any user account
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Chef verification: admins can mark a chef as verified
+ALTER TABLE verified_chefs ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
