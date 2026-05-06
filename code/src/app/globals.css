@@ -824,3 +824,407 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* === Kitchen Challenges === */
+.challenge-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+  border-bottom: 2px solid #e5e0d8;
+}
+.challenge-tabs .tab {
+  background: transparent;
+  border: none;
+  padding: 12px 20px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #777;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.15s;
+}
+.challenge-tabs .tab:hover { color: #444; }
+.challenge-tabs .tab.active {
+  color: #e07b39;
+  border-bottom-color: #e07b39;
+}
+
+.challenges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 20px;
+}
+.challenge-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 6%);
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.challenge-emoji {
+  font-size: 2.5rem;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.challenge-body { flex: 1; min-width: 0; }
+.challenge-body h3 { font-size: 1.1rem; margin-bottom: 6px; }
+.challenge-body p { color: #666; font-size: 0.92rem; margin-bottom: 10px; }
+.challenge-meta { font-size: 0.85rem; color: #888; margin-bottom: 8px; }
+.challenge-reward {
+  font-size: 0.88rem;
+  background: #fff8f0;
+  color: #b85a1f;
+  padding: 6px 10px;
+  border-radius: 8px;
+  display: inline-block;
+  margin-top: 4px;
+}
+
+.tag {
+  display: inline-block;
+  background: #f0e8de;
+  color: #6b5a48;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+}
+
+.progress-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+.progress-bar {
+  flex: 1;
+  background: #eee;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress-fill {
+  background: linear-gradient(90deg, #e07b39, #f4a261);
+  height: 100%;
+  transition: width 0.3s;
+}
+.progress-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #555;
+  white-space: nowrap;
+}
+
+.card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.log-form {
+  margin-top: 12px;
+  padding: 12px;
+  background: #faf6f1;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.log-form input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+.log-actions { display: flex; gap: 8px; }
+.log-hint {
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 4px;
+}
+.log-hint code {
+  background: #ffe6cc;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: #b85a1f;
+}
+
+.alert-error {
+  background: #fee;
+  color: #b00020;
+  padding: 12px 16px;
+  border-radius: 10px;
+  margin-bottom: 16px;
+  border: 1px solid #f4c2c2;
+}
+
+.dashboard-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 6%);
+}
+.section-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+.table-wrapper { overflow-x: auto; }
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.data-table th,
+.data-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #eee;
+  text-align: left;
+}
+.data-table th {
+  background: #faf6f1;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  color: #888;
+  letter-spacing: 0.05em;
+}
+.leader-row-self {
+  background: #fff8f0;
+}
+.self-badge {
+  color: #e07b39;
+  font-weight: 600;
+}
+
+.badges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+.badge-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  text-align: center;
+  box-shadow: 0 2px 12px rgb(0 0 0 / 6%);
+  border: 2px solid #ffe6cc;
+}
+.badge-emoji { font-size: 3rem; margin-bottom: 8px; }
+.badge-card h3 { font-size: 1rem; margin-bottom: 6px; color: #e07b39; }
+.badge-card p { font-size: 0.85rem; color: #666; margin-bottom: 8px; }
+.badge-date { font-size: 0.78rem; color: #999; }
+
+/* === Profile Achievements & Recipe History === */
+.profile-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  color: #1f1f1f;
+}
+
+.profile-stats-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.profile-stat {
+  flex: 1;
+  min-width: 80px;
+  background: #faf6f1;
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-stat-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #e07b39;
+  line-height: 1;
+}
+
+.profile-stat-label {
+  font-size: 0.75rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.profile-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.profile-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff8f0;
+  border: 2px solid #f0d9c2;
+  border-radius: 999px;
+  padding: 6px 14px;
+  cursor: default;
+}
+
+.profile-badge-emoji { font-size: 1.2rem; }
+
+.profile-badge-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #b85a1f;
+}
+
+.profile-empty {
+  color: #999;
+  font-size: 0.9rem;
+  padding: 8px 0;
+}
+
+.recipe-history-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.recipe-history-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.recipe-history-emoji { font-size: 1.4rem; flex-shrink: 0; }
+
+.recipe-history-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: #1f1f1f;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.recipe-history-meta {
+  font-size: 0.8rem;
+  color: #888;
+  margin-top: 2px;
+}
+
+.recipe-history-tags {
+  color: #b85a1f;
+  font-style: italic;
+}
+
+.recipe-history-right {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.recipe-qualified {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #27ae60;
+}
+
+.recipe-not-qualified {
+  font-size: 0.8rem;
+  color: #aaa;
+}
+
+.recipe-history-date {
+  font-size: 0.78rem;
+  color: #bbb;
+}
+
+/* === Recipe History Expandable === */
+.recipe-history-item-wrap {
+  border-bottom: 1px solid #f0ebe4;
+}
+.recipe-history-item-wrap:last-child { border-bottom: none; }
+.recipe-history-item-wrap.open .recipe-history-item {
+  background: #faf6f1;
+  border-radius: 10px 10px 0 0;
+}
+
+.recipe-history-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 10px;
+  gap: 12px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 10px;
+  transition: background 0.15s;
+}
+.recipe-history-item:hover { background: #faf6f1; }
+
+.recipe-history-chevron {
+  font-size: 0.65rem;
+  color: #bbb;
+  margin-top: 2px;
+}
+
+.recipe-history-detail {
+  background: #faf6f1;
+  border-radius: 0 0 10px 10px;
+  padding: 14px 16px 16px;
+  margin-bottom: 4px;
+}
+
+.recipe-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 24px;
+}
+
+.recipe-detail-block { display: flex; flex-direction: column; gap: 4px; }
+.recipe-detail-block.full { grid-column: 1 / -1; }
+
+.recipe-detail-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #aaa;
+}
+
+.recipe-detail-value {
+  font-size: 0.9rem;
+  color: #333;
+}
+
+.recipe-detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.recipe-detail-ingredients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ingredient-pill {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
