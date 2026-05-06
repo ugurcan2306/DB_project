@@ -116,3 +116,45 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TR
 
 -- Chef verification: admins can mark a chef as verified
 ALTER TABLE verified_chefs ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- ─── Recipe Module ───────────────────────────────────────────────────────────
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'difficulty_level') THEN
+    CREATE TYPE difficulty_level AS ENUM ('easy', 'medium', 'hard');
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS recipes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  author_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title VARCHAR(255) NOT NULL,
+  description TEXT,
+  servings INT NOT NULL DEFAULT 2 CHECK (servings > 0 AND servings <= 100),
+  cooking_time_minutes INT NOT NULL CHECK (cooking_time_minutes > 0 AND cooking_time_minutes <= 1440),
+  difficulty difficulty_level NOT NULL DEFAULT 'medium',
+  dietary_tags TEXT[] NOT NULL DEFAULT '{}',
+  cover_image_url TEXT,
+  is_published BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS recipe_steps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  step_number INT NOT NULL CHECK (step_number > 0),
+  instruction TEXT NOT NULL,
+  UNIQUE (recipe_id, step_number)
+);
+
+-- RecipeContainsIngredient: maps canonical taxonomy ingredients to a recipe
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  ingredient_id UUID NOT NULL REFERENCES ingredients(id) ON DELETE RESTRICT,
+  quantity NUMERIC(10,3) NOT NULL CHECK (quantity > 0),
+  unit VARCHAR(40) NOT NULL DEFAULT 'unit',
+  UNIQUE (recipe_id, ingredient_id)
+);

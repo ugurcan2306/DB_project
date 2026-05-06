@@ -24,7 +24,7 @@ export function AppNavbar({
   activePath,
   user,
 }: {
-  activePath: "discover" | "dashboard" | "supplier" | "profile" | "login" | "register" | "admin";
+  activePath: "discover" | "dashboard" | "supplier" | "profile" | "login" | "register" | "admin" | "create-recipe";
   user?: NavbarUser | null;
 }) {
   return (
@@ -53,6 +53,11 @@ export function AppNavbar({
           <Link href="/dashboard" className={activePath === "dashboard" ? "active" : ""}>
             Dashboard
           </Link>
+          {(user.role === "home_cook" || user.role === "verified_chef") ? (
+            <Link href="/recipes/create" className={activePath === "create-recipe" ? "active" : ""}>
+              Create Recipe
+            </Link>
+          ) : null}
           {user.role === "local_supplier" ? (
             <Link href="/supplier" className={activePath === "supplier" ? "active" : ""}>
               Supplier Portal

@@ -689,6 +689,113 @@ a {
   color: #e07b39;
 }
 
+/* ─── Recipe Creation Form ───────────────────────────────────────────────── */
+
+.recipe-form-layout {
+  display: grid;
+  gap: 20px;
+}
+
+.recipe-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: #1f1f1f;
+}
+
+.recipe-section-hint {
+  font-size: 0.85rem;
+  color: #777;
+  margin-bottom: 14px;
+}
+
+.recipe-ingredient-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.recipe-add-btn-wrap {
+  flex-shrink: 0;
+}
+
+.recipe-list-wrap {
+  margin-top: 16px;
+  overflow-x: auto;
+}
+
+.recipe-step-input-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  margin-top: 12px;
+}
+
+.recipe-steps-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.recipe-step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #fdf8f3;
+  border: 1px solid #f0e6dd;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.recipe-step-num {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #e07b39;
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.recipe-step-text {
+  flex: 1;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  padding-top: 3px;
+}
+
+.recipe-step-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.recipe-submit-row {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: 40px;
+}
+
+.recipe-loading {
+  font-size: 0.88rem;
+  color: #888;
+  padding: 10px 0;
+}
+
+.recipe-empty-hint {
+  font-size: 0.88rem;
+  color: #999;
+  margin-top: 12px;
+}
+
 @media (max-width: 768px) {
   .navbar {
     padding: 0 16px;
