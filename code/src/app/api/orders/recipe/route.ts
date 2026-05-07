@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/db/pool";
 import { logSupplierAction } from "@/lib/supplier-history";
+import { creditRoyaltyForCookLog } from "@/lib/royalties";
 import { randomUUID } from "node:crypto";
 
 type IngredientInput = {
@@ -275,14 +276,22 @@ export async function POST(request: Request) {
       [totalPrice, session.user.id],
     );
 
-    // Mock cook action so chef royalty metrics can be updated from existing cook_logs-based analytics.
-    await client.query(
-      `INSERT INTO cook_logs (user_id, recipe_id, rating)
-       VALUES ($1, $2, 5)
-       ON CONFLICT (user_id, recipe_id)
-       DO UPDATE SET cooked_at = NOW()`,
+    // Record the purchase as a cook_log with source='purchased' and credit chef royalties.
+    const prevSourceRes = await client.query<{ source: string }>(
+      `SELECT source FROM cook_logs WHERE user_id = $1 AND recipe_id = $2`,
       [session.user.id, body.recipeId],
     );
+    const prevSource = prevSourceRes.rows[0]?.source ?? null;
+
+    await client.query(
+      `INSERT INTO cook_logs (user_id, recipe_id, rating, source)
+       VALUES ($1, $2, 5, 'purchased')
+       ON CONFLICT (user_id, recipe_id)
+       DO UPDATE SET source = 'purchased', cooked_at = NOW()`,
+      [session.user.id, body.recipeId],
+    );
+
+    await creditRoyaltyForCookLog(client, body.recipeId, prevSource, "purchased");
 
     await client.query("COMMIT");
     return NextResponse.json({

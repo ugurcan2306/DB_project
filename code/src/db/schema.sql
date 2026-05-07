@@ -365,6 +365,10 @@ CREATE TABLE IF NOT EXISTS cook_logs (
   UNIQUE (user_id, recipe_id)
 );
 
+-- Royalty tracking: distinguish manual reviews from Shop-This-Meal purchases.
+ALTER TABLE cook_logs
+  ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'manual';
+
 -- =========================================================
 -- Meal Lists
 -- =========================================================
