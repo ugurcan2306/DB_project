@@ -71,6 +71,7 @@ export default async function ProfilePage() {
             fullName: profile.fullName,
             email: profile.email,
             role: profile.role,
+            balance: profile.balance,
             avatarUrl: profile.avatarUrl,
             deliveryAddress: profile.deliveryAddress,
             businessName: profile.businessName,

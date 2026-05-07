@@ -14,13 +14,28 @@ type SharedRecipe = {
   author_name: string;
   created_at: string;
   steps: { step_number: number; instruction: string }[];
-  ingredients: { ingredient_name: string; quantity: number; unit: string }[];
+  ingredients: { ingredient_id: string; ingredient_name: string; taxonomy_name: string; quantity: number; unit: string }[];
 };
 
 type MealList = {
   id: string;
   name: string;
 };
+
+type RecipeQuote = {
+  totalPrice: string;
+  canFulfill: boolean;
+  suppliersUsed: number;
+  shortages: Array<{ ingredientName: string; required: number; available: number; unit: string }>;
+  substitutionsUsed?: boolean;
+  substitutionNotes?: Array<{ requested: string; usedAlternatives: string[] }>;
+};
+
+function difficultyClass(level: string) {
+  if (level === "easy") return "shared-pill shared-pill-easy";
+  if (level === "hard") return "shared-pill shared-pill-hard";
+  return "shared-pill shared-pill-medium";
+}
 
 export function SharedRecipesClient() {
   const [recipes, setRecipes] = useState<SharedRecipe[]>([]);
@@ -32,6 +47,9 @@ export function SharedRecipesClient() {
   const [selectedList, setSelectedList] = useState<Record<string, string>>({});
   const [adding, setAdding] = useState<string | null>(null);
   const [addedTo, setAddedTo] = useState<Record<string, string>>({});  // recipeId → list name
+  const [buying, setBuying] = useState<string | null>(null);
+  const [purchaseInfo, setPurchaseInfo] = useState<Record<string, string>>({});
+  const [quotes, setQuotes] = useState<Record<string, RecipeQuote>>({});
 
   useEffect(() => {
     Promise.all([
@@ -49,6 +67,42 @@ export function SharedRecipesClient() {
       .catch(() => setError("Failed to load recipes."))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!recipes.length) return;
+
+    let active = true;
+    const loadQuotes = async () => {
+      const entries = await Promise.all(
+        recipes.map(async (recipe) => {
+          const res = await fetch("/api/orders/quote", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ingredients: recipe.ingredients.map((ing) => ({
+                ingredientId: ing.ingredient_id,
+                ingredientName: ing.ingredient_name,
+                quantity: ing.quantity,
+                unit: ing.unit,
+              })),
+            }),
+          });
+          const json = (await res.json()) as RecipeQuote;
+          return [recipe.id, json] as const;
+        }),
+      );
+
+      if (!active) return;
+      const next: Record<string, RecipeQuote> = {};
+      for (const [id, quote] of entries) next[id] = quote;
+      setQuotes(next);
+    };
+
+    void loadQuotes();
+    return () => {
+      active = false;
+    };
+  }, [recipes]);
 
   async function handleAddToList(recipeId: string) {
     const listId = selectedList[recipeId];
@@ -72,6 +126,51 @@ export function SharedRecipesClient() {
     }
   }
 
+  async function handleShopThisMeal(recipe: SharedRecipe) {
+    setBuying(recipe.id);
+    try {
+      const res = await fetch("/api/orders/recipe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipeId: recipe.id,
+          recipeTitle: recipe.title,
+          ingredients: recipe.ingredients.map((ing) => ({
+            ingredientId: ing.ingredient_id,
+            ingredientName: ing.ingredient_name,
+            quantity: ing.quantity,
+            unit: ing.unit,
+          })),
+        }),
+      });
+      const json = (await res.json()) as {
+        error?: string;
+        shortages?: Array<{ ingredientName: string; required: number; available: number; unit: string }>;
+        totalPrice?: string;
+        remainingBalance?: string;
+      };
+      if (!res.ok) {
+        if (json.shortages?.length) {
+          alert(
+            `Cannot complete purchase.\n${json.shortages
+              .map((s) => `${s.ingredientName}: required ${s.required} ${s.unit}, available ${s.available} ${s.unit}`)
+              .join("\n")}`,
+          );
+        } else {
+          alert(json.error ?? "Could not process checkout.");
+        }
+        return;
+      }
+
+      setPurchaseInfo((prev) => ({
+        ...prev,
+        [recipe.id]: `Purchased for $${json.totalPrice}. Remaining balance: $${json.remainingBalance}`,
+      }));
+    } finally {
+      setBuying(null);
+    }
+  }
+
   if (loading) return <p>Loading recipes…</p>;
   if (error) return <p style={{ color: "red" }}>{error}</p>;
 
@@ -84,73 +183,116 @@ export function SharedRecipesClient() {
   }
 
   return (
-    <div>
+    <div className="shared-recipes-grid">
       {recipes.map((recipe) => (
-        <div key={recipe.id} className="filter-section" style={{ marginBottom: "1rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-            <div style={{ flex: 1 }}>
-              <h2 style={{ margin: "0 0 0.25rem 0" }}>{recipe.title}</h2>
-              <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.85rem", color: "#888" }}>
-                by {recipe.author_name}
-              </p>
-              {recipe.description && (
-                <p style={{ margin: "0 0 0.5rem 0", color: "#666" }}>{recipe.description}</p>
-              )}
-              <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.9rem" }}>
-                <strong>Difficulty:</strong> {recipe.difficulty} &nbsp;|&nbsp;
-                <strong>Time:</strong> {recipe.cooking_time_minutes} min &nbsp;|&nbsp;
-                <strong>Servings:</strong> {recipe.servings}
-              </p>
-              {recipe.dietary_tags.length > 0 && (
-                <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem" }}>
-                  <strong>Tags:</strong> {recipe.dietary_tags.join(", ")}
+        <article key={recipe.id} className="filter-section shared-recipe-card">
+          <div className="shared-recipe-top">
+            <div className="shared-recipe-main">
+              <div className="shared-recipe-heading">
+                <h2 className="shared-recipe-title">{recipe.title}</h2>
+                <span className={difficultyClass(recipe.difficulty)}>{recipe.difficulty}</span>
+              </div>
+              <p className="shared-recipe-author">By {recipe.author_name}</p>
+              {recipe.description ? <p className="shared-recipe-description">{recipe.description}</p> : null}
+              <div className="shared-recipe-meta">
+                <span className="shared-meta-chip">{recipe.cooking_time_minutes} min</span>
+                <span className="shared-meta-chip">{recipe.servings} servings</span>
+                <span className="shared-meta-chip">{new Date(recipe.created_at).toLocaleDateString()}</span>
+              </div>
+              {recipe.dietary_tags.length > 0 ? (
+                <div className="shared-recipe-tags">
+                  {recipe.dietary_tags.map((tag) => (
+                    <span key={tag} className="tag">
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="shared-recipe-columns">
+                {recipe.ingredients?.length > 0 && (
+                  <div className="shared-recipe-section shared-recipe-panel">
+                    <strong className="shared-recipe-label">Ingredients</strong>
+                    <ul className="shared-recipe-list">
+                      {recipe.ingredients.map((ing) => (
+                        <li key={ing.ingredient_name} className="shared-recipe-list-item">
+                          <span className="shared-qty">{ing.quantity} {ing.unit}</span>
+                          <span>{ing.taxonomy_name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {recipe.steps?.length > 0 && (
+                  <div className="shared-recipe-section shared-recipe-panel">
+                    <strong className="shared-recipe-label">Instructions</strong>
+                    <ol className="shared-recipe-list">
+                      {recipe.steps.map((step) => (
+                        <li key={step.step_number} className="shared-recipe-list-item">
+                          {step.instruction}
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </div>
+
+              <div className="shared-recipe-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary shared-buy-btn"
+                  onClick={() => handleShopThisMeal(recipe)}
+                  disabled={buying === recipe.id || quotes[recipe.id]?.canFulfill === false}
+                >
+                  {buying === recipe.id ? "Processing..." : "Shop This Meal"}
+                </button>
+                {quotes[recipe.id] ? (
+                  <span className="shared-recipe-price">
+                    Estimated: ${quotes[recipe.id].totalPrice} · {quotes[recipe.id].suppliersUsed} supplier
+                    {quotes[recipe.id].suppliersUsed === 1 ? "" : "s"}
+                  </span>
+                ) : (
+                  <span className="shared-recipe-muted">Calculating price…</span>
+                )}
+                {purchaseInfo[recipe.id] ? (
+                  <span className="shared-recipe-success">{purchaseInfo[recipe.id]}</span>
+                ) : null}
+              </div>
+              {quotes[recipe.id] && !quotes[recipe.id].canFulfill ? (
+                <p className="error-text shared-shortage-note">
+                  Not enough stock for this recipe right now. Missing:{" "}
+                  {quotes[recipe.id].shortages
+                    .map((s) => `${s.ingredientName} (${s.available}/${s.required} ${s.unit})`)
+                    .join(", ")}
                 </p>
-              )}
-
-              {recipe.ingredients?.length > 0 && (
-                <div style={{ marginBottom: "0.5rem" }}>
-                  <strong style={{ fontSize: "0.85rem" }}>Ingredients</strong>
-                  <ul style={{ margin: "0.25rem 0 0 1.1rem", padding: 0 }}>
-                    {recipe.ingredients.map((ing) => (
-                      <li key={ing.ingredient_name} style={{ fontSize: "0.85rem", marginBottom: "0.15rem" }}>
-                        {ing.quantity} {ing.unit} — {ing.ingredient_name}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              {recipe.steps?.length > 0 && (
-                <div style={{ marginBottom: "0.5rem" }}>
-                  <strong style={{ fontSize: "0.85rem" }}>Instructions</strong>
-                  <ol style={{ margin: "0.25rem 0 0 1.1rem", padding: 0 }}>
-                    {recipe.steps.map((step) => (
-                      <li key={step.step_number} style={{ fontSize: "0.85rem", marginBottom: "0.2rem" }}>
-                        {step.instruction}
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              )}
+              ) : null}
+              {quotes[recipe.id]?.canFulfill && quotes[recipe.id]?.substitutionsUsed ? (
+                <p className="shared-substitution-note">
+                  Disclaimer: exact taxonomy stock is partially unavailable. We will use same-category substitutions for:{" "}
+                  {(quotes[recipe.id].substitutionNotes ?? [])
+                    .map((n) => `${n.requested} -> ${n.usedAlternatives.join(", ")}`)
+                    .join(" | ")}
+                </p>
+              ) : null}
 
               {/* Add to list controls */}
               {lists.length === 0 ? (
-                <p style={{ fontSize: "0.85rem", color: "#999", marginTop: "0.5rem" }}>
+                <p className="shared-recipe-muted">
                   Create a meal list first to save this recipe.
                 </p>
               ) : addedTo[recipe.id] ? (
-                <p style={{ fontSize: "0.85rem", color: "green", marginTop: "0.5rem" }}>
+                <p className="shared-recipe-success">
                   Added to &quot;{addedTo[recipe.id]}&quot;
                 </p>
               ) : (
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: "0.5rem" }}>
+                <div className="shared-recipe-list-actions">
                   <select
-                    className="supplier-select"
+                    className="supplier-select shared-list-select"
                     value={selectedList[recipe.id] ?? ""}
                     onChange={(e) =>
                       setSelectedList((prev) => ({ ...prev, [recipe.id]: e.target.value }))
                     }
-                    style={{ maxWidth: 220 }}
                   >
                     <option value="">— add to list —</option>
                     {lists.map((l) => (
@@ -174,11 +316,11 @@ export function SharedRecipesClient() {
               <img
                 src={recipe.cover_image_url}
                 alt={recipe.title}
-                style={{ width: 110, height: 85, objectFit: "cover", borderRadius: 4, marginLeft: 16 }}
+                className="shared-recipe-image"
               />
             )}
           </div>
-        </div>
+        </article>
       ))}
     </div>
   );

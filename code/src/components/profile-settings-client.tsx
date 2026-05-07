@@ -7,6 +7,7 @@ type ProfileData = {
   fullName: string;
   email: string;
   role: UserRole;
+  balance: string;
   avatarUrl: string | null;
   deliveryAddress: string | null;
   businessName: string | null;
@@ -26,6 +27,8 @@ export function ProfileSettingsClient({ initialProfile }: { initialProfile: Prof
   const [message, setMessage] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [balance, setBalance] = useState(initialProfile.balance);
+  const [balanceAmount, setBalanceAmount] = useState("50");
 
   async function uploadAvatarIfSelected() {
     if (!avatarFile) return avatarUrl;
@@ -83,6 +86,30 @@ export function ProfileSettingsClient({ initialProfile }: { initialProfile: Prof
     } finally {
       setSaving(false);
     }
+  }
+
+  async function addBalance() {
+    setError(null);
+    setMessage(null);
+    const amount = Number(balanceAmount);
+    if (!amount || amount <= 0) {
+      setError("Enter a valid amount to add.");
+      return;
+    }
+
+    const response = await fetch("/api/profile/balance", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount }),
+    });
+    const json = (await response.json()) as { error?: string; balance?: string };
+    if (!response.ok || !json.balance) {
+      setError(json.error ?? "Could not add balance.");
+      return;
+    }
+
+    setBalance(json.balance);
+    setMessage(`Balance updated. New balance: $${Number(json.balance).toFixed(2)}`);
   }
 
   return (
@@ -162,6 +189,34 @@ export function ProfileSettingsClient({ initialProfile }: { initialProfile: Prof
 
       {error ? <p className="error-text profile-feedback">{error}</p> : null}
       {message ? <p className="ok-text profile-feedback">{message}</p> : null}
+
+      <div className="supplier-form-grid profile-form-grid" style={{ marginTop: 12 }}>
+        <div className="supplier-field">
+          <label className="supplier-label" htmlFor="currentBalance">
+            Current Balance
+          </label>
+          <input id="currentBalance" className="supplier-input" value={`$${Number(balance).toFixed(2)}`} disabled />
+        </div>
+        <div className="supplier-field">
+          <label className="supplier-label" htmlFor="balanceAmount">
+            Mock Add Balance
+          </label>
+          <div className="supplier-inline">
+            <input
+              id="balanceAmount"
+              className="supplier-input"
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={balanceAmount}
+              onChange={(event) => setBalanceAmount(event.target.value)}
+            />
+            <button type="button" className="btn btn-secondary supplier-search-btn" onClick={addBalance}>
+              Add
+            </button>
+          </div>
+        </div>
+      </div>
 
       <button type="button" className="btn btn-primary profile-save-btn" onClick={saveSettings} disabled={saving}>
         {saving || uploadingAvatar ? "Saving..." : "Save Settings"}

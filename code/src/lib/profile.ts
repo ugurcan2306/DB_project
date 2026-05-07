@@ -6,6 +6,7 @@ export type UserProfile = {
   fullName: string;
   email: string;
   role: UserRole;
+  balance: string;
   avatarUrl: string | null;
   deliveryAddress: string | null;
   businessName: string | null;
@@ -19,6 +20,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     full_name: string;
     email: string;
     role: UserRole;
+    balance: string;
     avatar_url: string | null;
     delivery_address: string | null;
     business_name: string | null;
@@ -29,6 +31,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
             u.full_name,
             u.email,
             u.role,
+            u.balance,
             u.avatar_url,
             hc.delivery_address,
             ls.business_name,
@@ -50,6 +53,7 @@ export async function getUserProfile(userId: string): Promise<UserProfile | null
     fullName: row.full_name,
     email: row.email,
     role: row.role,
+    balance: row.balance,
     avatarUrl: row.avatar_url,
     deliveryAddress: row.delivery_address,
     businessName: row.business_name,

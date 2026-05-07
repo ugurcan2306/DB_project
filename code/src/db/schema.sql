@@ -64,12 +64,12 @@ CREATE TABLE IF NOT EXISTS supplier_inventory_items (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   supplier_id UUID NOT NULL REFERENCES local_suppliers(user_id) ON DELETE CASCADE,
   ingredient_id UUID NOT NULL REFERENCES ingredients(id) ON DELETE RESTRICT,
+  alias_id UUID REFERENCES ingredient_aliases(id) ON DELETE SET NULL,
   unit VARCHAR(40) NOT NULL DEFAULT 'unit',
   unit_price NUMERIC(10,2) NOT NULL CHECK (unit_price >= 0),
   current_stock NUMERIC(12,3) NOT NULL DEFAULT 0 CHECK (current_stock >= 0),
   is_active BOOLEAN NOT NULL DEFAULT TRUE,
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE (supplier_id, ingredient_id)
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS supplier_inventory_batches (
@@ -125,8 +125,28 @@ CREATE TABLE IF NOT EXISTS ingredient_aliases (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+ALTER TABLE supplier_inventory_items
+  ADD COLUMN IF NOT EXISTS alias_id UUID REFERENCES ingredient_aliases(id) ON DELETE SET NULL;
+
+ALTER TABLE supplier_inventory_items
+  DROP CONSTRAINT IF EXISTS supplier_inventory_items_supplier_id_ingredient_id_key;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'supplier_inventory_items_supplier_ingredient_alias_key'
+  ) THEN
+    ALTER TABLE supplier_inventory_items
+      ADD CONSTRAINT supplier_inventory_items_supplier_ingredient_alias_key
+      UNIQUE (supplier_id, ingredient_id, alias_id);
+  END IF;
+END $$;
+
 -- User management: soft-disable any user account
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS balance NUMERIC(12,2) NOT NULL DEFAULT 0;
 
 -- Chef verification: admins can mark a chef as verified
 ALTER TABLE verified_chefs ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
@@ -169,10 +189,29 @@ CREATE TABLE IF NOT EXISTS recipe_ingredients (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
   ingredient_id UUID NOT NULL REFERENCES ingredients(id) ON DELETE RESTRICT,
+  alias_id UUID REFERENCES ingredient_aliases(id) ON DELETE SET NULL,
   quantity NUMERIC(10,3) NOT NULL CHECK (quantity > 0),
-  unit VARCHAR(40) NOT NULL DEFAULT 'unit',
-  UNIQUE (recipe_id, ingredient_id)
+  unit VARCHAR(40) NOT NULL DEFAULT 'unit'
 );
+
+ALTER TABLE recipe_ingredients
+  ADD COLUMN IF NOT EXISTS alias_id UUID REFERENCES ingredient_aliases(id) ON DELETE SET NULL;
+
+ALTER TABLE recipe_ingredients
+  DROP CONSTRAINT IF EXISTS recipe_ingredients_recipe_id_ingredient_id_key;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'recipe_ingredients_recipe_ingredient_alias_key'
+  ) THEN
+    ALTER TABLE recipe_ingredients
+      ADD CONSTRAINT recipe_ingredients_recipe_ingredient_alias_key
+      UNIQUE (recipe_id, ingredient_id, alias_id);
+  END IF;
+END $$;
 
 -- =========================================================
 -- Kitchen Challenge Participation (Phase 2 - Feature 4)

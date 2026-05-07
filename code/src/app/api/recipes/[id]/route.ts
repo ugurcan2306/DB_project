@@ -34,9 +34,15 @@ export async function GET(
   );
 
   const ingredientsResult = await db.query(
-    `SELECT ri.ingredient_id, i.ingredient_name, ri.quantity, ri.unit
+    `SELECT ri.ingredient_id,
+            ri.alias_id,
+            i.ingredient_name,
+            COALESCE(ia.alias_name, i.ingredient_name) AS taxonomy_name,
+            ri.quantity,
+            ri.unit
      FROM recipe_ingredients ri
      JOIN ingredients i ON i.id = ri.ingredient_id
+     LEFT JOIN ingredient_aliases ia ON ia.id = ri.alias_id
      WHERE ri.recipe_id = $1`,
     [id],
   );
@@ -66,7 +72,7 @@ export async function PUT(
     dietaryTags?: string[];
     coverImageUrl?: string;
     steps?: { instruction: string }[];
-    ingredients?: { ingredientId: string; quantity: number; unit: string }[];
+    ingredients?: { ingredientId: string; aliasId?: string | null; quantity: number; unit: string }[];
   };
 
   if (!body.title?.trim()) return NextResponse.json({ error: "Title is required." }, { status: 400 });
@@ -111,8 +117,9 @@ export async function PUT(
     for (const ing of body.ingredients) {
       if (!ing.ingredientId || !ing.quantity || !ing.unit) continue;
       await client.query(
-        `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit) VALUES ($1, $2, $3, $4)`,
-        [id, ing.ingredientId, ing.quantity, ing.unit.trim()],
+        `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, alias_id, quantity, unit)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [id, ing.ingredientId, ing.aliasId ?? null, ing.quantity, ing.unit.trim()],
       );
     }
 
