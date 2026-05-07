@@ -28,7 +28,25 @@ export function AdminUsersClient() {
   }
 
   useEffect(() => {
-    void loadUsers(roleFilter);
+    let active = true;
+    const run = async () => {
+      try {
+        const url = roleFilter ? `/api/admin/users?role=${roleFilter}` : "/api/admin/users";
+        const res = await fetch(url);
+        const data = (await res.json()) as { users?: AdminUser[] };
+        if (active) {
+          setUsers(data.users ?? []);
+        }
+      } catch {
+        if (active) {
+          setError("Failed to load users.");
+        }
+      }
+    };
+    void run();
+    return () => {
+      active = false;
+    };
   }, [roleFilter]);
 
   async function toggleActive(user: AdminUser) {

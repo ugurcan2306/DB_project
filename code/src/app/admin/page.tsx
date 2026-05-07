@@ -34,7 +34,9 @@ export default async function AdminPage() {
 
           <Link href="/admin/taxonomy" className="analytics-card admin-nav-card">
             <h3>Taxonomy Mapping</h3>
-            <p>Manage ingredient categories, canonical ingredients, and alias mappings (e.g. "Roma Tomato" → "Tomato").</p>
+            <p>
+              Manage ingredient categories, canonical ingredients, and alias mappings (e.g. &quot;Roma Tomato&quot; → &quot;Tomato&quot;).
+            </p>
             <span className="admin-nav-arrow">→</span>
           </Link>
 

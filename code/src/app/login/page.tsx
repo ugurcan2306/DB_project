@@ -78,12 +78,6 @@ export default function LoginPage() {
               {loading ? "Logging in..." : "Login"}
             </button>
 
-            <div className="or-sep">- OR -</div>
-
-            <button type="button" disabled className="btn btn-secondary btn-block btn-large">
-              G Login with Google
-            </button>
-
             <div className="auth-footer">
               {"Don't have an account? "}
               <Link href="/register">Register here</Link>
