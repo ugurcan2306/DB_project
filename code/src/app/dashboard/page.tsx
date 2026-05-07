@@ -22,6 +22,7 @@ function getQuickLinks(role: UserRole): QuickLink[] {
       return [
         { emoji: "📖", label: "My Recipes", desc: "View and manage all your recipes.", href: "/recipes/my" },
         { emoji: "✏️", label: "Create Recipe", desc: "Publish a new recipe for the community.", href: "/recipes/create" },
+        { emoji: "💰", label: "Royalties", desc: "Track earnings from cooks and reviews.", href: "/royalties" },
         { emoji: "🏆", label: "Challenges", desc: "Participate in cooking challenges.", href: "/challenges" },
         { emoji: "👤", label: "Edit Profile", desc: "Update your bio and avatar.", href: "/profile" },
       ];
