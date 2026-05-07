@@ -3,9 +3,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUserProfile } from "@/lib/profile";
 import { AppNavbar } from "@/components/app-navbar";
-import { MyRecipesClient } from "@/components/my-recipes-client";
+import { MealListsClient } from "@/components/meal-lists-client";
 
-export default async function MyRecipesPage() {
+export default async function MealListsPage() {
   const session = await getServerSession(authOptions);
   if (!session?.user) redirect("/login");
 
@@ -17,7 +17,7 @@ export default async function MyRecipesPage() {
   return (
     <>
       <AppNavbar
-        activePath="my-recipes"
+        activePath="meal-lists"
         user={
           profile
             ? { name: profile.fullName, role: profile.role, avatarUrl: profile.avatarUrl }
@@ -26,10 +26,10 @@ export default async function MyRecipesPage() {
       />
       <main className="container">
         <div className="page-header">
-          <h1>My Recipes</h1>
-          <p>All recipes you have created.</p>
+          <h1>Meal Lists</h1>
+          <p>Group recipes into lists to plan your meals.</p>
         </div>
-        <MyRecipesClient userRole={role} />
+        <MealListsClient />
       </main>
     </>
   );

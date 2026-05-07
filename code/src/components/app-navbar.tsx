@@ -24,7 +24,7 @@ export function AppNavbar({
   activePath,
   user,
 }: {
-  activePath: "discover" | "dashboard" | "supplier" | "supplier_history" | "challenges" | "profile" | "login" | "register" | "admin" | "create-recipe" | "my-recipes";
+  activePath: "discover" | "dashboard" | "supplier" | "supplier_history" | "challenges" | "profile" | "login" | "register" | "admin" | "create-recipe" | "my-recipes" | "meal-lists" | "shared-recipes";
   user?: NavbarUser | null;
 }) {
   return (
@@ -60,6 +60,12 @@ export function AppNavbar({
               </Link>
               <Link href="/recipes/create" className={activePath === "create-recipe" ? "active" : ""}>
                 Create Recipe
+              </Link>
+              <Link href="/meal-lists" className={activePath === "meal-lists" ? "active" : ""}>
+                Meal Lists
+              </Link>
+              <Link href="/shared-recipes" className={activePath === "shared-recipes" ? "active" : ""}>
+                Shared Recipes
               </Link>
             </>
           ) : null}

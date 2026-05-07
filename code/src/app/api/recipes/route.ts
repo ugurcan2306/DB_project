@@ -1,6 +1,23 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/pool";
 import { requireRecipeCreatorSession } from "@/lib/recipe-auth";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+
+export async function GET() {
+  const session = await getServerSession(authOptions);
+  if (!session?.user) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const db = getDb();
+  const result = await db.query(
+    `SELECT r.id, r.title, u.full_name AS author_name
+     FROM recipes r
+     JOIN users u ON u.id = r.author_id
+     WHERE r.is_published = TRUE
+     ORDER BY r.title`,
+  );
+  return NextResponse.json({ recipes: result.rows });
+}
 
 type IngredientInput = {
   ingredientId: string;
@@ -59,8 +76,8 @@ export async function POST(request: Request) {
     await client.query("BEGIN");
 
     const recipeResult = await client.query<{ id: string }>(
-      `INSERT INTO recipes (author_id, title, description, servings, cooking_time_minutes, difficulty, dietary_tags, cover_image_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO recipes (author_id, title, description, servings, cooking_time_minutes, difficulty, dietary_tags, cover_image_url, is_published)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, FALSE)
        RETURNING id`,
       [
         session.user.id,

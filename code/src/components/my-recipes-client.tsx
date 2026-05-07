@@ -23,16 +23,32 @@ type Recipe = {
   difficulty: string;
   dietary_tags: string[];
   cover_image_url: string | null;
+  is_published: boolean;
   created_at: string;
   steps?: Step[];
   ingredients?: Ingredient[];
 };
 
-export function MyRecipesClient() {
+export function MyRecipesClient({ userRole }: { userRole: string }) {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [sharing, setSharing] = useState<string | null>(null);
+
+  async function handleShare(id: string) {
+    setSharing(id);
+    try {
+      const res = await fetch(`/api/recipes/${id}/share`, { method: "POST" });
+      const data = (await res.json()) as { is_published?: boolean; error?: string };
+      if (!res.ok) { alert(data.error ?? "Failed to update share status."); return; }
+      setRecipes((prev) =>
+        prev.map((r) => r.id === id ? { ...r, is_published: data.is_published! } : r),
+      );
+    } finally {
+      setSharing(null);
+    }
+  }
 
   async function handleDelete(id: string, title: string) {
     if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
@@ -90,7 +106,14 @@ export function MyRecipesClient() {
             <div key={recipe.id} className="filter-section" style={{ marginBottom: "1rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div style={{ flex: 1 }}>
-                  <h2 style={{ margin: "0 0 0.25rem 0" }}>{recipe.title}</h2>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "0.25rem" }}>
+                    <h2 style={{ margin: 0 }}>{recipe.title}</h2>
+                    {userRole === "verified_chef" && recipe.is_published && (
+                      <span style={{ fontSize: "0.75rem", padding: "2px 8px", borderRadius: 12, background: "#d1fae5", color: "#065f46" }}>
+                        Shared
+                      </span>
+                    )}
+                  </div>
                   {recipe.description && (
                     <p style={{ margin: "0 0 0.5rem 0", color: "#666" }}>{recipe.description}</p>
                   )}
@@ -134,6 +157,17 @@ export function MyRecipesClient() {
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, marginLeft: 12 }}>
                   <div style={{ display: "flex", gap: 8 }}>
+                    {userRole === "verified_chef" && !recipe.is_published && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={() => handleShare(recipe.id)}
+                        disabled={sharing === recipe.id}
+                        style={{ whiteSpace: "nowrap" }}
+                      >
+                        {sharing === recipe.id ? "…" : "Share"}
+                      </button>
+                    )}
                     <Link href={`/recipes/${recipe.id}/edit`}>
                       <button type="button" className="btn btn-secondary" style={{ whiteSpace: "nowrap" }}>
                         Edit

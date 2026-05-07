@@ -17,9 +17,10 @@ export async function GET() {
     difficulty: string;
     dietary_tags: string[];
     cover_image_url: string | null;
+    is_published: boolean;
     created_at: string;
   }>(
-    `SELECT id, title, description, servings, cooking_time_minutes, difficulty, dietary_tags, cover_image_url, created_at
+    `SELECT id, title, description, servings, cooking_time_minutes, difficulty, dietary_tags, cover_image_url, is_published, created_at
      FROM recipes
      WHERE author_id = $1
      ORDER BY created_at DESC`,
