@@ -24,7 +24,7 @@ export function AppNavbar({
   activePath,
   user,
 }: {
-  activePath: "discover" | "dashboard" | "supplier" | "profile" | "login" | "register";
+  activePath: "discover" | "dashboard" | "supplier" | "supplier_history" | "profile" | "login" | "register";
   user?: NavbarUser | null;
 }) {
   return (
@@ -54,9 +54,14 @@ export function AppNavbar({
             Dashboard
           </Link>
           {user.role === "local_supplier" ? (
-            <Link href="/supplier" className={activePath === "supplier" ? "active" : ""}>
-              Supplier Portal
-            </Link>
+            <>
+              <Link href="/supplier" className={activePath === "supplier" ? "active" : ""}>
+                Supplier Portal
+              </Link>
+              <Link href="/supplier/history" className={activePath === "supplier_history" ? "active" : ""}>
+                Supplier History
+              </Link>
+            </>
           ) : null}
 
           <DropdownMenu.Root>

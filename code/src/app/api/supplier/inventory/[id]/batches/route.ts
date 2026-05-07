@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/pool";
 import { requireSupplierSession } from "@/lib/supplier-auth";
+import { logSupplierAction } from "@/lib/supplier-history";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireSupplierSession();
@@ -17,8 +18,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   try {
     await client.query("BEGIN");
 
-    const ownership = await client.query(
-      `SELECT id FROM supplier_inventory_items WHERE id = $1 AND supplier_id = $2`,
+    const ownership = await client.query<{ id: string; ingredient_id: string }>(
+      `SELECT id, ingredient_id FROM supplier_inventory_items WHERE id = $1 AND supplier_id = $2`,
       [id, session.user.id],
     );
     if (!ownership.rowCount) {
@@ -37,6 +38,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
        SET current_stock = current_stock + $1, updated_at = NOW()
        WHERE id = $2`,
       [body.quantityAdded, id],
+    );
+
+    await logSupplierAction(
+      {
+        supplierId: session.user.id,
+        actionType: "add_batch",
+        inventoryItemId: id,
+        ingredientId: ownership.rows[0].ingredient_id,
+        quantityChange: body.quantityAdded,
+        note: "Supplier added new inventory batch.",
+      },
+      client,
     );
 
     await client.query("COMMIT");
