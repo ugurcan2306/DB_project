@@ -9,8 +9,23 @@ type Ingredient = {
   category_name: string | null;
 };
 
+type IngredientAlias = {
+  id: string;
+  alias_name: string;
+  canonical_ingredient_id: string;
+  canonical_name: string;
+};
+
+type IngredientOption = {
+  value: string;
+  ingredientId: string;
+  aliasId: string | null;
+  label: string;
+};
+
 type IngredientRow = {
   ingredientId: string;
+  aliasId: string | null;
   ingredientName: string;
   quantity: string;
   unit: string;
@@ -31,7 +46,7 @@ const DIETARY_TAGS = [
   { value: "paleo", label: "Paleo" },
 ];
 
-const UNITS = ["g", "kg", "ml", "l", "cup", "tbsp", "tsp", "piece", "slice", "unit", "oz", "lb", "clove", "pinch"];
+const UNITS = ["kg", "g", "ml", "L"];
 
 export function EditRecipeClient({ recipeId }: { recipeId: string }) {
   const router = useRouter();
@@ -44,7 +59,7 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
   const [dietaryTags, setDietaryTags] = useState<string[]>([]);
   const [coverImageUrl, setCoverImageUrl] = useState("");
 
-  const [availableIngredients, setAvailableIngredients] = useState<Ingredient[]>([]);
+  const [availableIngredients, setAvailableIngredients] = useState<IngredientOption[]>([]);
   const [ingredientsLoading, setIngredientsLoading] = useState(true);
   const [selectedIngredientId, setSelectedIngredientId] = useState("");
   const [ingredientQty, setIngredientQty] = useState("");
@@ -61,10 +76,12 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
   useEffect(() => {
     Promise.all([
       fetch("/api/ingredients").then((r) => r.json()),
+      fetch("/api/ingredient-aliases").then((r) => r.json()),
       fetch(`/api/recipes/${recipeId}`).then((r) => r.json()),
     ])
-      .then(([ingData, recipeData]: [
+      .then(([ingData, aliasData, recipeData]: [
         { ingredients?: Ingredient[] },
+        { aliases?: IngredientAlias[] },
         {
           recipe?: {
             title: string; description: string | null; servings: number;
@@ -72,13 +89,43 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
             dietary_tags: string[]; cover_image_url: string | null;
           };
           steps?: { step_number: number; instruction: string }[];
-          ingredients?: { ingredient_id: string; ingredient_name: string; quantity: number; unit: string }[];
+          ingredients?: {
+            ingredient_id: string;
+            alias_id?: string | null;
+            ingredient_name: string;
+            taxonomy_name?: string;
+            quantity: number;
+            unit: string;
+          }[];
           error?: string;
         }
       ]) => {
-        const allIngs = ingData.ingredients ?? [];
-        setAvailableIngredients(allIngs);
-        if (allIngs.length) setSelectedIngredientId(allIngs[0].id);
+        const options: IngredientOption[] = [];
+        const aliases = aliasData.aliases ?? [];
+        const canonicals = ingData.ingredients ?? [];
+        if (aliases.length > 0) {
+          for (const alias of aliases) {
+            options.push({
+              value: `alias:${alias.id}`,
+              ingredientId: alias.canonical_ingredient_id,
+              aliasId: alias.id,
+              label: `${alias.alias_name} (${alias.canonical_name})`,
+            });
+          }
+        } else {
+          for (const ingredient of canonicals) {
+            options.push({
+              value: `ingredient:${ingredient.id}`,
+              ingredientId: ingredient.id,
+              aliasId: null,
+              label: ingredient.category_name
+                ? `${ingredient.ingredient_name} (${ingredient.category_name})`
+                : ingredient.ingredient_name,
+            });
+          }
+        }
+        setAvailableIngredients(options);
+        if (options.length) setSelectedIngredientId(options[0].value);
 
         if (recipeData.error) {
           setError(recipeData.error);
@@ -99,7 +146,8 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
         setAddedIngredients(
           (recipeData.ingredients ?? []).map((i) => ({
             ingredientId: i.ingredient_id,
-            ingredientName: i.ingredient_name,
+            aliasId: i.alias_id ?? null,
+            ingredientName: i.taxonomy_name ?? i.ingredient_name,
             quantity: String(i.quantity),
             unit: i.unit,
           })),
@@ -125,22 +173,28 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
       setError("Please enter a valid quantity.");
       return;
     }
-    if (addedIngredients.some((i) => i.ingredientId === selectedIngredientId)) {
+    const found = availableIngredients.find((i) => i.value === selectedIngredientId);
+    if (!found) return;
+    if (addedIngredients.some((i) => i.ingredientId === found.ingredientId && i.aliasId === found.aliasId)) {
       setError("That ingredient is already added.");
       return;
     }
-    const found = availableIngredients.find((i) => i.id === selectedIngredientId);
-    if (!found) return;
     setError("");
     setAddedIngredients((prev) => [
       ...prev,
-      { ingredientId: found.id, ingredientName: found.ingredient_name, quantity: ingredientQty, unit: ingredientUnit },
+      {
+        ingredientId: found.ingredientId,
+        aliasId: found.aliasId,
+        ingredientName: found.label,
+        quantity: ingredientQty,
+        unit: ingredientUnit,
+      },
     ]);
     setIngredientQty("");
   }
 
-  function removeIngredient(id: string) {
-    setAddedIngredients((prev) => prev.filter((i) => i.ingredientId !== id));
+  function removeIngredient(ingredientId: string, aliasId: string | null) {
+    setAddedIngredients((prev) => prev.filter((i) => !(i.ingredientId === ingredientId && i.aliasId === aliasId)));
   }
 
   function addStep() {
@@ -187,6 +241,7 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
           steps,
           ingredients: addedIngredients.map((i) => ({
             ingredientId: i.ingredientId,
+            aliasId: i.aliasId,
             quantity: parseFloat(i.quantity),
             unit: i.unit,
           })),
@@ -274,8 +329,8 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
             ) : (
               <select value={selectedIngredientId} onChange={(e) => setSelectedIngredientId(e.target.value)} className="supplier-select">
                 {availableIngredients.map((ing) => (
-                  <option key={ing.id} value={ing.id}>
-                    {ing.ingredient_name}{ing.category_name ? ` (${ing.category_name})` : ""}
+                  <option key={`${ing.value}-${ing.label}`} value={ing.value}>
+                    {ing.label}
                   </option>
                 ))}
               </select>
@@ -305,11 +360,11 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
               <thead><tr><th>Ingredient</th><th>Quantity</th><th>Unit</th><th></th></tr></thead>
               <tbody>
                 {addedIngredients.map((ing) => (
-                  <tr key={ing.ingredientId}>
+                  <tr key={`${ing.ingredientId}-${ing.aliasId ?? "canonical"}`}>
                     <td>{ing.ingredientName}</td>
                     <td>{ing.quantity}</td>
                     <td>{ing.unit}</td>
-                    <td><button type="button" className="btn btn-secondary supplier-action-btn" onClick={() => removeIngredient(ing.ingredientId)}>Remove</button></td>
+                    <td><button type="button" className="btn btn-secondary supplier-action-btn" onClick={() => removeIngredient(ing.ingredientId, ing.aliasId)}>Remove</button></td>
                   </tr>
                 ))}
               </tbody>

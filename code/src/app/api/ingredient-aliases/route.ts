@@ -12,16 +12,18 @@ export async function GET(request: Request) {
 
   const result = q
     ? await getDb().query(
-        `SELECT ia.id, ia.alias_name
+        `SELECT ia.id, ia.alias_name, ia.canonical_ingredient_id, i.ingredient_name AS canonical_name
          FROM ingredient_aliases ia
+         JOIN ingredients i ON i.id = ia.canonical_ingredient_id
          WHERE ia.alias_name ILIKE $1
          ORDER BY ia.alias_name ASC
          LIMIT 50`,
         [`%${q}%`],
       )
     : await getDb().query(
-        `SELECT ia.id, ia.alias_name
+        `SELECT ia.id, ia.alias_name, ia.canonical_ingredient_id, i.ingredient_name AS canonical_name
          FROM ingredient_aliases ia
+         JOIN ingredients i ON i.id = ia.canonical_ingredient_id
          ORDER BY ia.alias_name ASC
          LIMIT 200`,
       );

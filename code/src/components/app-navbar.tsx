@@ -24,7 +24,22 @@ export function AppNavbar({
   activePath,
   user,
 }: {
-  activePath: "discover" | "dashboard" | "supplier" | "supplier_history" | "challenges" | "profile" | "login" | "register" | "admin" | "create-recipe" | "my-recipes" | "meal-lists" | "shared-recipes" | "following";
+  activePath:
+    | "discover"
+    | "dashboard"
+    | "supplier"
+    | "supplier_history"
+    | "challenges"
+    | "profile"
+    | "orders"
+    | "login"
+    | "register"
+    | "admin"
+    | "create-recipe"
+    | "my-recipes"
+    | "meal-lists"
+    | "shared-recipes"
+    | "following";
   user?: NavbarUser | null;
 }) {
   return (
@@ -95,7 +110,7 @@ export function AppNavbar({
             <DropdownMenu.Trigger asChild>
               <button
                 type="button"
-                className={`nav-profile-link ${activePath === "profile" ? "active" : ""}`}
+                className={`nav-profile-link ${activePath === "profile" || activePath === "orders" ? "active" : ""}`}
                 aria-label="Open profile menu"
               >
                 {user.avatarUrl ? (
@@ -112,6 +127,11 @@ export function AppNavbar({
                 <DropdownMenu.Item asChild>
                   <Link href="/profile" className={`profile-dropdown-item ${activePath === "profile" ? "active" : ""}`}>
                     Profile
+                  </Link>
+                </DropdownMenu.Item>
+                <DropdownMenu.Item asChild>
+                  <Link href="/orders" className={`profile-dropdown-item ${activePath === "orders" ? "active" : ""}`}>
+                    Orders
                   </Link>
                 </DropdownMenu.Item>
                 <DropdownMenu.Separator className="profile-dropdown-separator" />

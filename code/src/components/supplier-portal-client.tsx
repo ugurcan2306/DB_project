@@ -9,7 +9,9 @@ type AliasSelectOption = { value: string; label: string };
 type InventoryItem = {
   id: string;
   ingredient_id: string;
+  alias_id?: string | null;
   ingredient_name: string;
+  alias_name?: string | null;
   unit: string;
   unit_price: string;
   current_stock: string;
@@ -80,7 +82,7 @@ export function SupplierPortalClient() {
         await loadAll();
         const aliasesRes = await fetch("/api/ingredient-aliases");
         const aliasesJson = (await aliasesRes.json()) as { aliases?: IngredientAliasOption[] };
-        if (active) setDefaultAliasOptions((aliasesJson.aliases ?? []).map((a) => ({ value: a.alias_name, label: a.alias_name })));
+        if (active) setDefaultAliasOptions((aliasesJson.aliases ?? []).map((a) => ({ value: a.id, label: a.alias_name })));
       } catch {
         if (active) {
           setError("Failed to load supplier data.");
@@ -102,7 +104,7 @@ export function SupplierPortalClient() {
       setError(json.error ?? "Failed to load ingredient aliases.");
       return [];
     }
-    return (json.aliases ?? []).map((a) => ({ value: a.alias_name, label: a.alias_name }));
+    return (json.aliases ?? []).map((a) => ({ value: a.id, label: a.alias_name }));
   }
 
   async function addInventoryItem() {
@@ -117,7 +119,7 @@ export function SupplierPortalClient() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ingredientName: selectedAlias.value,
+        aliasId: selectedAlias.value,
         unit: newUnit,
         unitPrice: Number(newPrice),
         initialStock: Number(newStock),
@@ -223,10 +225,8 @@ export function SupplierPortalClient() {
             <select id="unitSelect" className="supplier-select" value={newUnit} onChange={(event) => setNewUnit(event.target.value)}>
               <option value="kg">kg</option>
               <option value="g">g</option>
-              <option value="lt">lt</option>
               <option value="ml">ml</option>
-              <option value="piece">piece</option>
-              <option value="pack">pack</option>
+              <option value="L">L</option>
             </select>
           </div>
           <div className="supplier-field">
@@ -274,6 +274,7 @@ export function SupplierPortalClient() {
             <thead>
               <tr>
                 <th>Ingredient</th>
+                <th>Taxonomy Alias</th>
                 <th>Stock</th>
                 <th>Unit</th>
                 <th>Unit Price</th>
@@ -285,6 +286,7 @@ export function SupplierPortalClient() {
               {inventory.map((item) => (
                 <tr key={item.id}>
                   <td>{item.ingredient_name}</td>
+                  <td>{item.alias_name?.trim() ? item.alias_name : "—"}</td>
                   <td>{item.current_stock}</td>
                   <td>{item.unit}</td>
                   <td>{item.unit_price}</td>
@@ -305,7 +307,7 @@ export function SupplierPortalClient() {
               ))}
               {!inventory.length ? (
                 <tr>
-                  <td colSpan={6}>No inventory entries yet.</td>
+                  <td colSpan={7}>No inventory entries yet.</td>
                 </tr>
               ) : null}
             </tbody>
