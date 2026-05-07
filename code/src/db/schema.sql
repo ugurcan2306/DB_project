@@ -343,3 +343,4 @@ CREATE TABLE IF NOT EXISTS meal_list_recipes (
   recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
   added_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+

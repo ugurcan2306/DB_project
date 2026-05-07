@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ChallengeRow, UserChallengeRow, LeaderboardRow } from "@/lib/challenges";
 
@@ -23,6 +24,7 @@ export function ChallengesClient({
   leaderboard,
   badges,
   currentUserId,
+  isAdmin = false,
 }: {
   active: ActiveChallenge[];
   inProgress: UserChallengeRow[];
@@ -30,6 +32,7 @@ export function ChallengesClient({
   leaderboard: LeaderboardRow[];
   badges: Badge[];
   currentUserId: string;
+  isAdmin?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("active");
   const [logging, setLogging] = useState<string | null>(null);
@@ -71,22 +74,42 @@ export function ChallengesClient({
 
   return (
     <div>
+      {isAdmin && (
+        <div className="dashboard-card" style={{ marginBottom: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
+          <div>
+            <strong>Admin view</strong>
+            <p style={{ margin: "0.25rem 0 0", color: "#666" }}>
+              You organize these challenges — admins don&apos;t join or compete on the leaderboard.
+            </p>
+          </div>
+          <Link href="/admin/challenges" className="btn btn-primary">
+            Manage Challenges
+          </Link>
+        </div>
+      )}
+
       <div className="challenge-tabs">
         <button className={tab === "active" ? "tab active" : "tab"} onClick={() => setTab("active")}>
           Active ({active.length})
         </button>
-        <button className={tab === "joined" ? "tab active" : "tab"} onClick={() => setTab("joined")}>
-          My Challenges ({inProgress.length})
-        </button>
+        {!isAdmin && (
+          <button className={tab === "joined" ? "tab active" : "tab"} onClick={() => setTab("joined")}>
+            My Challenges ({inProgress.length})
+          </button>
+        )}
         <button className={tab === "leaderboard" ? "tab active" : "tab"} onClick={() => setTab("leaderboard")}>
           Leaderboard
         </button>
-        <button className={tab === "completed" ? "tab active" : "tab"} onClick={() => setTab("completed")}>
-          Completed ({completed.length})
-        </button>
-        <button className={tab === "badges" ? "tab active" : "tab"} onClick={() => setTab("badges")}>
-          My Badges ({badges.length})
-        </button>
+        {!isAdmin && (
+          <button className={tab === "completed" ? "tab active" : "tab"} onClick={() => setTab("completed")}>
+            Completed ({completed.length})
+          </button>
+        )}
+        {!isAdmin && (
+          <button className={tab === "badges" ? "tab active" : "tab"} onClick={() => setTab("badges")}>
+            My Badges ({badges.length})
+          </button>
+        )}
       </div>
 
       {error ? <div className="alert-error">{error}</div> : null}
@@ -101,6 +124,7 @@ export function ChallengesClient({
               onJoin={() => join(c.id)}
               onLeave={() => leave(c.id)}
               busy={pending}
+              isAdmin={isAdmin}
             />
           ))}
         </div>
@@ -213,11 +237,13 @@ function ChallengeCard({
   onJoin,
   onLeave,
   busy,
+  isAdmin,
 }: {
   c: ActiveChallenge;
   onJoin: () => void;
   onLeave: () => void;
   busy: boolean;
+  isAdmin: boolean;
 }) {
   return (
     <div className="challenge-card">
@@ -240,14 +266,24 @@ function ChallengeCard({
           </div>
         ) : null}
       </div>
-      <button
-        className={`btn ${c.joined ? "btn-secondary" : "btn-primary"}`}
-        style={{ whiteSpace: "nowrap" }}
-        disabled={busy}
-        onClick={c.joined ? onLeave : onJoin}
-      >
-        {c.joined ? "✓ Joined" : "Join"}
-      </button>
+      {isAdmin ? (
+        <Link
+          href="/admin/challenges"
+          className="btn btn-secondary"
+          style={{ whiteSpace: "nowrap" }}
+        >
+          Manage
+        </Link>
+      ) : (
+        <button
+          className={`btn ${c.joined ? "btn-secondary" : "btn-primary"}`}
+          style={{ whiteSpace: "nowrap" }}
+          disabled={busy}
+          onClick={c.joined ? onLeave : onJoin}
+        >
+          {c.joined ? "✓ Joined" : "Join"}
+        </button>
+      )}
     </div>
   );
 }

@@ -1173,6 +1173,178 @@ a {
   color: #bbb;
 }
 
+/* === Discover Page === */
+.discover-page {
+  min-height: calc(100vh - 64px);
+}
+
+.discover-hero {
+  background: linear-gradient(135deg, #fff8f2 0%, #fdf3e8 60%, #fce8d4 100%);
+  border-bottom: 1px solid #f0e0cc;
+  padding: 72px 24px 64px;
+}
+
+.discover-hero-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.discover-hero-badge {
+  display: inline-block;
+  background: #fff0e3;
+  color: #b85a1f;
+  border: 1px solid #f0d4b4;
+  border-radius: 999px;
+  padding: 4px 16px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+
+.discover-hero-title {
+  font-size: 2.8rem;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  color: #1f1f1f;
+  margin-bottom: 16px;
+}
+
+.discover-hero-accent {
+  color: #e07b39;
+}
+
+.discover-hero-sub {
+  font-size: 1.05rem;
+  color: #666;
+  line-height: 1.7;
+  margin-bottom: 32px;
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.discover-hero-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.discover-stats {
+  background: #fff;
+  border-bottom: 1px solid #f0e6dd;
+  padding: 28px 24px;
+}
+
+.discover-stats-inner {
+  max-width: 640px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+}
+
+.discover-stat {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.discover-stat-value {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #e07b39;
+  line-height: 1;
+}
+
+.discover-stat-label {
+  font-size: 0.78rem;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.discover-stat-divider {
+  width: 1px;
+  height: 48px;
+  background: #f0e6dd;
+  flex-shrink: 0;
+  margin: 0 24px;
+}
+
+.discover-features {
+  padding: 56px 24px 72px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.discover-features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+}
+
+.discover-feature-card {
+  background: #fff;
+  border: 1px solid #f0e6dd;
+  border-radius: 20px;
+  padding: 32px 28px;
+  box-shadow: 0 2px 16px rgb(0 0 0 / 5%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+
+.discover-feature-card:hover {
+  box-shadow: 0 8px 28px rgb(0 0 0 / 10%);
+  transform: translateY(-3px);
+}
+
+.discover-feature-emoji {
+  font-size: 2.2rem;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.discover-feature-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #1f1f1f;
+}
+
+.discover-feature-desc {
+  font-size: 0.9rem;
+  color: #666;
+  line-height: 1.6;
+  flex: 1;
+}
+
+.discover-feature-link {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #e07b39;
+  margin-top: 8px;
+  display: inline-block;
+}
+
+.discover-feature-link:hover {
+  color: #c96a2f;
+}
+
+@media (max-width: 640px) {
+  .discover-hero-title { font-size: 2rem; }
+  .discover-stat-value { font-size: 1.5rem; }
+  .discover-stat-divider { margin: 0 14px; }
+}
+
 /* === Recipe History Expandable === */
 .recipe-history-item-wrap {
   border-bottom: 1px solid #f0ebe4;

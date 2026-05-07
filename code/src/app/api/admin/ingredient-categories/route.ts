@@ -30,3 +30,14 @@ export async function POST(request: Request) {
   );
   return NextResponse.json({ category: result.rows[0] });
 }
+
+export async function DELETE(request: Request) {
+  const session = await requireAdminSession();
+  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const body = (await request.json()) as { id?: string };
+  if (!body.id) return NextResponse.json({ error: "id is required." }, { status: 400 });
+
+  await getDb().query(`DELETE FROM ingredient_categories WHERE id = $1`, [body.id]);
+  return NextResponse.json({ success: true });
+}

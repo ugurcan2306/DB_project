@@ -56,6 +56,7 @@ export default async function ChallengesPage() {
           leaderboard={leaderboard}
           badges={badges}
           currentUserId={session.user.id}
+          isAdmin={session.user.role === "admin"}
         />
       </main>
     </>
