@@ -11,7 +11,9 @@ type SharedRecipe = {
   servings: number;
   dietary_tags: string[];
   cover_image_url: string | null;
+  author_id: string;
   author_name: string;
+  is_following_author: boolean;
   created_at: string;
   steps: { step_number: number; instruction: string }[];
   ingredients: { ingredient_name: string; quantity: number; unit: string }[];
@@ -32,6 +34,31 @@ export function SharedRecipesClient() {
   const [selectedList, setSelectedList] = useState<Record<string, string>>({});
   const [adding, setAdding] = useState<string | null>(null);
   const [addedTo, setAddedTo] = useState<Record<string, string>>({});  // recipeId → list name
+  const [followBusy, setFollowBusy] = useState<string | null>(null);
+
+  async function toggleFollow(authorId: string, isFollowing: boolean) {
+    setFollowBusy(authorId);
+    try {
+      const res = isFollowing
+        ? await fetch(`/api/follows?chefId=${authorId}`, { method: "DELETE" })
+        : await fetch("/api/follows", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chefId: authorId }),
+          });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({} as { error?: string }));
+        alert(data.error ?? "Failed to update follow.");
+        return;
+      }
+      // Flip is_following_author for every recipe by this author.
+      setRecipes((prev) =>
+        prev.map((r) => (r.author_id === authorId ? { ...r, is_following_author: !isFollowing } : r)),
+      );
+    } finally {
+      setFollowBusy(null);
+    }
+  }
 
   useEffect(() => {
     Promise.all([
@@ -90,8 +117,21 @@ export function SharedRecipesClient() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div style={{ flex: 1 }}>
               <h2 style={{ margin: "0 0 0.25rem 0" }}>{recipe.title}</h2>
-              <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.85rem", color: "#888" }}>
-                by {recipe.author_name}
+              <p style={{ margin: "0 0 0.25rem 0", fontSize: "0.85rem", color: "#888", display: "flex", alignItems: "center", gap: 8 }}>
+                <span>by {recipe.author_name}</span>
+                <button
+                  type="button"
+                  className={recipe.is_following_author ? "btn btn-secondary" : "btn btn-primary"}
+                  style={{ padding: "2px 10px", fontSize: "0.72rem" }}
+                  onClick={() => toggleFollow(recipe.author_id, recipe.is_following_author)}
+                  disabled={followBusy === recipe.author_id}
+                >
+                  {followBusy === recipe.author_id
+                    ? "…"
+                    : recipe.is_following_author
+                      ? "Following"
+                      : "+ Follow"}
+                </button>
               </p>
               {recipe.description && (
                 <p style={{ margin: "0 0 0.5rem 0", color: "#666" }}>{recipe.description}</p>

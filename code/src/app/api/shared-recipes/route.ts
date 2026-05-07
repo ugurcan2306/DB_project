@@ -11,7 +11,11 @@ export async function GET() {
   const result = await db.query(
     `SELECT r.id, r.title, r.description, r.difficulty, r.cooking_time_minutes,
             r.servings, r.dietary_tags, r.cover_image_url, r.created_at,
-            u.full_name AS author_name
+            u.id AS author_id,
+            u.full_name AS author_name,
+            EXISTS (
+              SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.followed_id = u.id
+            ) AS is_following_author
      FROM recipes r
      JOIN users u ON u.id = r.author_id
      WHERE r.is_published = TRUE

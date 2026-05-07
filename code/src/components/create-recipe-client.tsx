@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Ingredient = {
   id: string;
@@ -35,6 +35,8 @@ const UNITS = ["g", "kg", "ml", "l", "cup", "tbsp", "tsp", "piece", "slice", "un
 
 export function CreateRecipeClient() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sourceRecipeId = searchParams.get("from");
 
   // Metadata state
   const [title, setTitle] = useState("");
@@ -60,17 +62,101 @@ export function CreateRecipeClient() {
   // Form state
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [prefillNote, setPrefillNote] = useState<string | null>(null);
+  const [prefillLoading, setPrefillLoading] = useState(Boolean(sourceRecipeId));
+
+  // Ingredient picker UX
+  const [ingredientSearch, setIngredientSearch] = useState("");
+  const filteredIngredients = useMemo(() => {
+    const q = ingredientSearch.trim().toLowerCase();
+    if (!q) return availableIngredients;
+    return availableIngredients.filter(
+      (i) =>
+        i.ingredient_name.toLowerCase().includes(q) ||
+        (i.category_name?.toLowerCase().includes(q) ?? false),
+    );
+  }, [availableIngredients, ingredientSearch]);
 
   useEffect(() => {
     fetch("/api/ingredients")
       .then((r) => r.json())
       .then((data: { ingredients?: Ingredient[] }) => {
-        setAvailableIngredients(data.ingredients ?? []);
-        if (data.ingredients?.length) setSelectedIngredientId(data.ingredients[0].id);
+        const list = data.ingredients ?? [];
+        setAvailableIngredients(list);
+        if (list.length) setSelectedIngredientId(list[0].id);
       })
       .catch(() => setError("Failed to load ingredients."))
       .finally(() => setIngredientsLoading(false));
   }, []);
+
+  // Pre-fill the form when arriving from "Use this Recipe" (?from=<id>)
+  useEffect(() => {
+    if (!sourceRecipeId || ingredientsLoading) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/recipes/${sourceRecipeId}/public`);
+        const data = await res.json();
+        if (cancelled) return;
+        if (!res.ok) {
+          setError(data.error ?? "Failed to load source recipe.");
+          return;
+        }
+        const r = data.recipe as {
+          title: string;
+          description: string | null;
+          servings: number;
+          cooking_time_minutes: number;
+          difficulty: string;
+          dietary_tags: string[];
+          cover_image_url: string | null;
+          author_name: string;
+        };
+        const srcIngredients = data.ingredients as {
+          ingredient_id: string;
+          ingredient_name: string;
+          quantity: number;
+          unit: string;
+        }[];
+        const srcSteps = data.steps as { step_number: number; instruction: string }[];
+
+        setTitle(`${r.title} (my version)`);
+        setDescription(
+          r.description
+            ? `${r.description}\n\nAdapted from ${r.author_name}'s original recipe.`
+            : `Adapted from ${r.author_name}'s original recipe.`,
+        );
+        setServings(String(r.servings));
+        setCookingTime(String(r.cooking_time_minutes));
+        setDifficulty(r.difficulty);
+        setDietaryTags(r.dietary_tags ?? []);
+        setCoverImageUrl(r.cover_image_url ?? "");
+        setAddedIngredients(
+          srcIngredients.map((ing) => ({
+            ingredientId: ing.ingredient_id,
+            ingredientName: ing.ingredient_name,
+            quantity: String(ing.quantity),
+            unit: ing.unit,
+          })),
+        );
+        setSteps(
+          srcSteps
+            .sort((a, b) => a.step_number - b.step_number)
+            .map((s) => ({ instruction: s.instruction })),
+        );
+        setPrefillNote(`Pre-filled from "${r.title}" by ${r.author_name}. Tweak anything below before publishing.`);
+      } catch {
+        if (!cancelled) setError("Failed to load source recipe.");
+      } finally {
+        if (!cancelled) setPrefillLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceRecipeId, ingredientsLoading]);
 
   function toggleTag(value: string) {
     setDietaryTags((prev) =>
@@ -169,6 +255,43 @@ export function CreateRecipeClient() {
 
   return (
     <form onSubmit={handleSubmit} className="recipe-form-layout">
+      {prefillLoading && (
+        <div
+          className="filter-section"
+          style={{ background: "#fff8f2", borderColor: "#f0d4b4", textAlign: "center" }}
+        >
+          <p style={{ margin: 0, color: "#b85a1f", fontWeight: 600 }}>
+            Loading source recipe — pre-filling the form…
+          </p>
+        </div>
+      )}
+      {prefillNote && !prefillLoading && (
+        <div
+          className="filter-section"
+          style={{
+            background: "linear-gradient(135deg,#fff8f2,#fdebd9)",
+            borderColor: "#f0d4b4",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 16,
+          }}
+        >
+          <div>
+            <strong style={{ color: "#b85a1f" }}>📋 Pre-filled</strong>{" "}
+            <span style={{ color: "#555" }}>{prefillNote}</span>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+            onClick={() => setPrefillNote(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       {/* ── Section 1: Metadata ── */}
       <section className="filter-section">
         <h2 className="recipe-section-title">Recipe Details</h2>
@@ -281,18 +404,70 @@ export function CreateRecipeClient() {
             {ingredientsLoading ? (
               <p className="recipe-loading">Loading ingredients…</p>
             ) : (
-              <select
-                value={selectedIngredientId}
-                onChange={(e) => setSelectedIngredientId(e.target.value)}
-                className="supplier-select"
-              >
-                {availableIngredients.map((ing) => (
-                  <option key={ing.id} value={ing.id}>
-                    {ing.ingredient_name}
-                    {ing.category_name ? ` (${ing.category_name})` : ""}
-                  </option>
-                ))}
-              </select>
+              <>
+                <input
+                  type="search"
+                  className="supplier-input"
+                  placeholder="Search ingredients (e.g. tomato, rice)…"
+                  value={ingredientSearch}
+                  onChange={(e) => setIngredientSearch(e.target.value)}
+                  style={{ marginBottom: 6 }}
+                />
+                <div
+                  style={{
+                    maxHeight: 160,
+                    overflowY: "auto",
+                    border: "1px solid #e6dccd",
+                    borderRadius: 6,
+                    background: "#fff",
+                  }}
+                >
+                  {filteredIngredients.length === 0 ? (
+                    <p style={{ padding: "8px 12px", margin: 0, color: "#888", fontSize: "0.85rem" }}>
+                      No ingredients match &ldquo;{ingredientSearch}&rdquo;.
+                    </p>
+                  ) : (
+                    filteredIngredients.map((ing) => {
+                      const alreadyAdded = addedIngredients.some((a) => a.ingredientId === ing.id);
+                      const selected = selectedIngredientId === ing.id;
+                      return (
+                        <button
+                          key={ing.id}
+                          type="button"
+                          onClick={() => setSelectedIngredientId(ing.id)}
+                          disabled={alreadyAdded}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            width: "100%",
+                            padding: "6px 10px",
+                            background: selected ? "#fff0e3" : "transparent",
+                            border: "none",
+                            borderBottom: "1px solid #f5ece0",
+                            cursor: alreadyAdded ? "not-allowed" : "pointer",
+                            color: alreadyAdded ? "#aaa" : "#333",
+                            fontSize: "0.88rem",
+                            textAlign: "left",
+                          }}
+                        >
+                          <span>
+                            {ing.ingredient_name}
+                            {ing.category_name && (
+                              <span style={{ color: "#999", fontSize: "0.78rem" }}>
+                                {" "}· {ing.category_name}
+                              </span>
+                            )}
+                          </span>
+                          {alreadyAdded && (
+                            <span style={{ color: "#27ae60", fontSize: "0.72rem" }}>✓ added</span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </>
             )}
           </div>
           <div className="form-group" style={{ flex: 1 }}>

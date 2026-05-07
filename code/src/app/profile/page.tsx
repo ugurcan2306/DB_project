@@ -9,6 +9,8 @@ import { getUserBadges, getUserRecipeHistory, getUserChallengeStats } from "@/li
 import { RecipeHistoryList } from "@/components/recipe-history-list";
 import { getChefRatings, getChefAllTimeStats } from "@/lib/cook-logs";
 import type { ChefRecipeRating, ChefAllTimeStats } from "@/lib/cook-logs";
+import { listFollowableChefs, getFollowerCount, getFollowingCount } from "@/lib/follows";
+import Link from "next/link";
 
 function initialsFromName(name: string) {
   return name
@@ -30,13 +32,18 @@ export default async function ProfilePage() {
     redirect("/dashboard");
   }
 
-  const [badges, recipeHistory, stats, chefRatings, chefAllTime] = await Promise.all([
+  const [badges, recipeHistory, stats, chefRatings, chefAllTime, allChefs, followerCount, followingCount] = await Promise.all([
     getUserBadges(session.user.id),
     getUserRecipeHistory(session.user.id),
     getUserChallengeStats(session.user.id),
     profile.role === "verified_chef" ? getChefRatings(session.user.id) : Promise.resolve([] as ChefRecipeRating[]),
     profile.role === "verified_chef" ? getChefAllTimeStats(session.user.id) : Promise.resolve(null as ChefAllTimeStats | null),
+    listFollowableChefs(session.user.id),
+    getFollowerCount(session.user.id),
+    getFollowingCount(session.user.id),
   ]);
+
+  const followingList = allChefs.filter((c) => c.is_following);
 
   return (
     <>
@@ -78,6 +85,89 @@ export default async function ProfilePage() {
             chefBio: profile.chefBio,
           }}
         />
+
+        {/* Follow Stats + Following list */}
+        <section className="filter-section">
+          <h2 className="profile-section-title">👥 Network</h2>
+          <div className="profile-stats-row" style={{ marginBottom: "1rem" }}>
+            <div className="profile-stat">
+              <span className="profile-stat-value">{followingCount}</span>
+              <span className="profile-stat-label">Following</span>
+            </div>
+            <div className="profile-stat">
+              <span className="profile-stat-value">{followerCount}</span>
+              <span className="profile-stat-label">Followers</span>
+            </div>
+          </div>
+
+          {followingList.length === 0 ? (
+            <p className="profile-empty">
+              You aren&apos;t following any chefs yet.{" "}
+              <Link href="/following" style={{ color: "#e07b39", fontWeight: 600 }}>
+                Find chefs to follow →
+              </Link>
+            </p>
+          ) : (
+            <>
+              <h3 style={{ fontSize: "1rem", marginBottom: 8 }}>Chefs you follow</h3>
+              <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                {followingList.map((c) => (
+                  <li
+                    key={c.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      padding: "8px 12px",
+                      border: "1px solid #f0e6dd",
+                      borderRadius: 8,
+                    }}
+                  >
+                    {c.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={c.avatar_url}
+                        alt={c.full_name}
+                        style={{ width: 36, height: 36, borderRadius: "50%", objectFit: "cover" }}
+                      />
+                    ) : (
+                      <div
+                        style={{
+                          width: 36,
+                          height: 36,
+                          borderRadius: "50%",
+                          background: "#fdebd9",
+                          color: "#b85a1f",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 700,
+                          fontSize: "0.8rem",
+                        }}
+                      >
+                        {initialsFromName(c.full_name)}
+                      </div>
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600 }}>
+                        {c.full_name}
+                        {c.is_verified && <span style={{ color: "#3498db", marginLeft: 4 }}>✓</span>}
+                      </div>
+                      <div style={{ fontSize: "0.78rem", color: "#888" }}>
+                        {c.recipe_count} recipes · {c.follower_count} followers
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p style={{ marginTop: 12, fontSize: "0.85rem" }}>
+                <Link href="/following" style={{ color: "#e07b39", fontWeight: 600 }}>
+                  Open Following Feed →
+                </Link>
+              </p>
+            </>
+          )}
+        </section>
 
         {/* Achievements */}
         <section className="filter-section">
