@@ -24,7 +24,7 @@ export function AppNavbar({
   activePath,
   user,
 }: {
-  activePath: "discover" | "dashboard" | "supplier" | "supplier_history" | "profile" | "login" | "register";
+  activePath: "discover" | "dashboard" | "supplier" | "supplier_history" | "challenges" | "profile" | "login" | "register" | "admin" | "create-recipe";
   user?: NavbarUser | null;
 }) {
   return (
@@ -53,6 +53,14 @@ export function AppNavbar({
           <Link href="/dashboard" className={activePath === "dashboard" ? "active" : ""}>
             Dashboard
           </Link>
+          {(user.role === "home_cook" || user.role === "verified_chef") ? (
+            <Link href="/recipes/create" className={activePath === "create-recipe" ? "active" : ""}>
+              Create Recipe
+            </Link>
+          ) : null}
+          <Link href="/challenges" className={activePath === "challenges" ? "active" : ""}>
+            Challenges
+          </Link>
           {user.role === "local_supplier" ? (
             <>
               <Link href="/supplier" className={activePath === "supplier" ? "active" : ""}>
@@ -62,6 +70,11 @@ export function AppNavbar({
                 Supplier History
               </Link>
             </>
+          ) : null}
+          {user.role === "admin" ? (
+            <Link href="/admin" className={activePath === "admin" ? "active" : ""}>
+              Admin
+            </Link>
           ) : null}
 
           <DropdownMenu.Root>

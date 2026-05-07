@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chef Royalty Dashboard</title>
+  <link rel="stylesheet" href="../css/style.css">
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <header class="navbar">
+    <a href="a_filter.html" class="logo">
+      <span>&#127860;</span> FarmToTable
+    </a>
+    <nav>
+      <a href="h_chef_dashboard.html" class="active">Dashboard</a>
+      <a href="g_following_feed.html">Following</a>
+      <a href="a_filter.html">Discover</a>
+      <a href="i_challenges.html">Challenges</a>
+    </nav>
+    <div class="user-section">
+      <div class="notification-icon" onclick="toggleNotifications(event)">
+        &#128276;
+        <span class="badge" id="notifBadge">2</span>
+        <div class="notification-dropdown" id="notifDropdown" style="display:none;" onclick="event.stopPropagation()">
+          <div class="notif-header">Notifications</div>
+          <div class="notif-item unread" onclick="readNotif(this)">
+            <strong>Chef Emily</strong> added a new recipe: <em>Garlic Butter Salmon</em>
+            <div class="time">2 hours ago</div>
+          </div>
+          <div class="notif-item" onclick="readNotif(this)">
+            <strong>Chef Marcus</strong> posted: <em>Vegan Tacos</em>
+            <div class="time">1 day ago</div>
+          </div>
+        </div>
+      </div>
+      <div class="cart-icon" onclick="window.location.href='d_shop.html'">
+        &#128722;
+        <span class="badge">0</span>
+      </div>
+      <a href="f_profile.html" class="avatar">MC</a>
+    </div>
+  </header>
+
+  <div class="container">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1>&#128197; Royalty Dashboard</h1>
+      <p>Track your earnings and meal kit performance, Chef Marcus.</p>
+    </div>
+
+    <!-- KPI Cards -->
+    <div class="dashboard-kpi-row">
+      <div class="kpi-card">
+        <div class="kpi-icon">&#127869;</div>
+        <div class="kpi-value">318</div>
+        <div class="kpi-label">Total Meals Cooked</div>
+      </div>
+      <div class="kpi-card highlight">
+        <div class="kpi-icon">&#128176;</div>
+        <div class="kpi-value">$1,432.10</div>
+        <div class="kpi-label">Total Royalties Earned</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">&#11088;</div>
+        <div class="kpi-value">4.8</div>
+        <div class="kpi-label">Avg. Chef Rating</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-icon">&#128101;</div>
+        <div class="kpi-value">12.5k</div>
+        <div class="kpi-label">Total Followers</div>
+      </div>
+    </div>
+
+    <!-- Recent Purchases Table (ChefRoyaltyDashboard view) -->
+    <div class="dashboard-card">
+      <div class="section-title">&#128203; Recent Meal Kit Purchases</div>
+      <p class="db-hint">Sourced from <code>ChefRoyaltyDashboard</code> SQL view — joins VerifiedChef, User, creates, constructs, past-purchase.</p>
+      <div class="table-wrapper">
+        <table class="data-table" id="royaltyTable">
+          <thead>
+            <tr>
+              <th>Meal Kit</th>
+              <th>Recipe</th>
+              <th>Buyer</th>
+              <th>Date</th>
+              <th>Sale Price</th>
+              <th>Royalty (10%)</th>
+            </tr>
+          </thead>
+          <tbody id="royaltyBody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Monthly Summary -->
+    <div class="dashboard-card">
+      <div class="section-title">&#128200; Monthly Earnings Summary</div>
+      <div class="chart-bars" id="chartBars">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+  </div>
+
+  <script src="../js/data.js"></script>
+  <script>
+    // Mock data aligned with ChefRoyaltyDashboard view
+    const mockPurchases = [
+      { mealKit: "MK-001", recipe: "Grilled Salmon with Avocado Salsa", buyer: "John D.", date: "2026-03-22", price: 18.40 },
+      { mealKit: "MK-002", recipe: "Mushroom Risotto",                  buyer: "Ana S.",  date: "2026-03-21", price: 22.10 },
+      { mealKit: "MK-001", recipe: "Grilled Salmon with Avocado Salsa", buyer: "Liam T.", date: "2026-03-20", price: 18.40 },
+      { mealKit: "MK-003", recipe: "Mushroom Risotto",                  buyer: "Emma R.", date: "2026-03-19", price: 22.10 },
+      { mealKit: "MK-001", recipe: "Grilled Salmon with Avocado Salsa", buyer: "Nina W.", date: "2026-03-18", price: 18.40 },
+    ];
+
+    const tbody = document.getElementById('royaltyBody');
+    tbody.innerHTML = mockPurchases.map(p => {
+      const royalty = (p.price * 0.10).toFixed(2);
+      return `
+        <tr>
+          <td><span class="tag">${p.mealKit}</span></td>
+          <td>${p.recipe}</td>
+          <td>${p.buyer}</td>
+          <td>${p.date}</td>
+          <td>$${p.price.toFixed(2)}</td>
+          <td style="color:#27ae60;font-weight:700;">$${royalty}</td>
+        </tr>
+      `;
+    }).join('');
+
+    // Simple monthly bar chart (mock data)
+    const months = [
+      { label: "Nov", value: 180 },
+      { label: "Dec", value: 320 },
+      { label: "Jan", value: 240 },
+      { label: "Feb", value: 390 },
+      { label: "Mar", value: 302 },
+    ];
+    const mMax = Math.max(...months.map(m => m.value));
+    document.getElementById('chartBars').innerHTML = months.map(m => `
+      <div class="bar-group">
+        <div class="bar-fill" style="height:${Math.round((m.value / mMax) * 140)}px;">
+          <span class="bar-value">$${m.value}</span>
+        </div>
+        <div class="bar-label">${m.label}</div>
+      </div>
+    `).join('');
+  </script>
+
+</body>
+</html>
