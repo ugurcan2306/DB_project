@@ -13,6 +13,8 @@ type SharedRecipe = {
   cover_image_url: string | null;
   author_name: string;
   created_at: string;
+  steps: { step_number: number; instruction: string }[];
+  ingredients: { ingredient_name: string; quantity: number; unit: string }[];
 };
 
 type MealList = {
@@ -103,6 +105,32 @@ export function SharedRecipesClient() {
                 <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.85rem" }}>
                   <strong>Tags:</strong> {recipe.dietary_tags.join(", ")}
                 </p>
+              )}
+
+              {recipe.ingredients?.length > 0 && (
+                <div style={{ marginBottom: "0.5rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>Ingredients</strong>
+                  <ul style={{ margin: "0.25rem 0 0 1.1rem", padding: 0 }}>
+                    {recipe.ingredients.map((ing) => (
+                      <li key={ing.ingredient_name} style={{ fontSize: "0.85rem", marginBottom: "0.15rem" }}>
+                        {ing.quantity} {ing.unit} — {ing.ingredient_name}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {recipe.steps?.length > 0 && (
+                <div style={{ marginBottom: "0.5rem" }}>
+                  <strong style={{ fontSize: "0.85rem" }}>Instructions</strong>
+                  <ol style={{ margin: "0.25rem 0 0 1.1rem", padding: 0 }}>
+                    {recipe.steps.map((step) => (
+                      <li key={step.step_number} style={{ fontSize: "0.85rem", marginBottom: "0.2rem" }}>
+                        {step.instruction}
+                      </li>
+                    ))}
+                  </ol>
+                </div>
               )}
 
               {/* Add to list controls */}

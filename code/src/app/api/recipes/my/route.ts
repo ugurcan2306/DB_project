@@ -22,7 +22,7 @@ export async function GET() {
   }>(
     `SELECT id, title, description, servings, cooking_time_minutes, difficulty, dietary_tags, cover_image_url, is_published, created_at
      FROM recipes
-     WHERE author_id = $1
+     WHERE author_id = $1 AND is_deleted = FALSE
      ORDER BY created_at DESC`,
     [session.user.id],
   );

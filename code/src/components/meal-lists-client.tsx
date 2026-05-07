@@ -14,10 +14,16 @@ type MealList = {
 type RecipeInList = {
   id: string;
   title: string;
+  description: string | null;
   difficulty: string;
   cooking_time_minutes: number;
   servings: number;
+  dietary_tags: string[];
+  cover_image_url: string | null;
   author_name: string;
+  is_deleted: boolean;
+  steps: { step_number: number; instruction: string }[];
+  ingredients: { ingredient_name: string; quantity: number; unit: string }[];
 };
 
 export function MealListsClient() {
@@ -62,7 +68,7 @@ export function MealListsClient() {
     }
   }
 
-  async function handleCreate(e: React.FormEvent) {
+  async function handleCreate(e: { preventDefault(): void }) {
     e.preventDefault();
     if (!newName.trim()) return;
     setCreating(true);
@@ -188,26 +194,59 @@ export function MealListsClient() {
                     No recipes yet. Go to <Link href="/shared-recipes">Shared Recipes</Link> to add some.
                   </p>
                 ) : (
-                  <table className="supplier-table">
-                    <thead>
-                      <tr>
-                        <th>Recipe</th>
-                        <th>By</th>
-                        <th>Difficulty</th>
-                        <th>Time</th>
-                        <th>Servings</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {listRecipes[list.id].map((recipe) => (
-                        <tr key={recipe.id}>
-                          <td>{recipe.title}</td>
-                          <td>{recipe.author_name}</td>
-                          <td>{recipe.difficulty}</td>
-                          <td>{recipe.cooking_time_minutes} min</td>
-                          <td>{recipe.servings}</td>
-                          <td>
+                  <div>
+                    {listRecipes[list.id].map((recipe) => (
+                      <div key={recipe.id} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "0.85rem", marginBottom: "0.75rem" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                          <div style={{ flex: 1 }}>
+                            <h3 style={{ margin: "0 0 0.2rem 0" }}>{recipe.title}</h3>
+                            <p style={{ margin: "0 0 0.35rem 0", fontSize: "0.82rem", color: "#888" }}>by {recipe.author_name}</p>
+                            {recipe.description && (
+                              <p style={{ margin: "0 0 0.35rem 0", fontSize: "0.9rem", color: "#555" }}>{recipe.description}</p>
+                            )}
+                            <p style={{ margin: "0 0 0.35rem 0", fontSize: "0.85rem" }}>
+                              <strong>Difficulty:</strong> {recipe.difficulty} &nbsp;|&nbsp;
+                              <strong>Time:</strong> {recipe.cooking_time_minutes} min &nbsp;|&nbsp;
+                              <strong>Servings:</strong> {recipe.servings}
+                            </p>
+                            {recipe.dietary_tags?.length > 0 && (
+                              <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.82rem" }}>
+                                <strong>Tags:</strong> {recipe.dietary_tags.join(", ")}
+                              </p>
+                            )}
+
+                            {recipe.ingredients?.length > 0 && (
+                              <div style={{ marginBottom: "0.5rem" }}>
+                                <strong style={{ fontSize: "0.85rem" }}>Ingredients</strong>
+                                <ul style={{ margin: "0.25rem 0 0 1.1rem", padding: 0 }}>
+                                  {recipe.ingredients.map((ing) => (
+                                    <li key={ing.ingredient_name} style={{ fontSize: "0.85rem", marginBottom: "0.15rem" }}>
+                                      {ing.quantity} {ing.unit} — {ing.ingredient_name}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {recipe.steps?.length > 0 && (
+                              <div>
+                                <strong style={{ fontSize: "0.85rem" }}>Instructions</strong>
+                                <ol style={{ margin: "0.25rem 0 0 1.1rem", padding: 0 }}>
+                                  {recipe.steps.map((step) => (
+                                    <li key={step.step_number} style={{ fontSize: "0.85rem", marginBottom: "0.2rem" }}>
+                                      {step.instruction}
+                                    </li>
+                                  ))}
+                                </ol>
+                              </div>
+                            )}
+                          </div>
+
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, marginLeft: 12 }}>
+                            {recipe.cover_image_url && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={recipe.cover_image_url} alt={recipe.title} style={{ width: 90, height: 70, objectFit: "cover", borderRadius: 4 }} />
+                            )}
                             <button
                               type="button"
                               className="btn btn-secondary supplier-action-btn"
@@ -216,11 +255,11 @@ export function MealListsClient() {
                             >
                               {deletingRecipe === recipe.id ? "…" : "Remove"}
                             </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
             )}

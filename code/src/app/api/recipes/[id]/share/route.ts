@@ -17,7 +17,7 @@ export async function POST(_request: Request, { params }: Params) {
   const result = await db.query<{ is_published: boolean }>(
     `UPDATE recipes
      SET is_published = TRUE, updated_at = NOW()
-     WHERE id = $1 AND author_id = $2 AND is_published = FALSE
+     WHERE id = $1 AND author_id = $2 AND is_published = FALSE AND is_deleted = FALSE
      RETURNING is_published`,
     [id, session.user.id],
   );

@@ -20,7 +20,7 @@ export async function GET(
   const recipeResult = await db.query(
     `SELECT id, title, description, servings, cooking_time_minutes, difficulty, dietary_tags, cover_image_url
      FROM recipes
-     WHERE id = $1 AND author_id = $2`,
+     WHERE id = $1 AND author_id = $2 AND is_deleted = FALSE`,
     [id, session.user.id],
   );
 
@@ -84,7 +84,7 @@ export async function PUT(
     await client.query("BEGIN");
 
     const check = await client.query(
-      `SELECT id FROM recipes WHERE id = $1 AND author_id = $2`,
+      `SELECT id FROM recipes WHERE id = $1 AND author_id = $2 AND is_deleted = FALSE`,
       [id, session.user.id],
     );
     if (check.rows.length === 0) {
@@ -137,7 +137,8 @@ export async function DELETE(
   const db = getDb();
 
   const result = await db.query(
-    `DELETE FROM recipes WHERE id = $1 AND author_id = $2`,
+    `UPDATE recipes SET is_deleted = TRUE, updated_at = NOW()
+     WHERE id = $1 AND author_id = $2 AND is_deleted = FALSE`,
     [id, session.user.id],
   );
 

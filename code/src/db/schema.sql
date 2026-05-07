@@ -151,6 +151,7 @@ CREATE TABLE IF NOT EXISTS recipes (
   dietary_tags TEXT[] NOT NULL DEFAULT '{}',
   cover_image_url TEXT,
   is_published BOOLEAN NOT NULL DEFAULT TRUE,
+  is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

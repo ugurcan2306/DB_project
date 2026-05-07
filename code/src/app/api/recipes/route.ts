@@ -13,7 +13,7 @@ export async function GET() {
     `SELECT r.id, r.title, u.full_name AS author_name
      FROM recipes r
      JOIN users u ON u.id = r.author_id
-     WHERE r.is_published = TRUE
+     WHERE r.is_published = TRUE AND r.is_deleted = FALSE
      ORDER BY r.title`,
   );
   return NextResponse.json({ recipes: result.rows });

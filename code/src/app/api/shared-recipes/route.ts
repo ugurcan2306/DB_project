@@ -15,10 +15,49 @@ export async function GET() {
      FROM recipes r
      JOIN users u ON u.id = r.author_id
      WHERE r.is_published = TRUE
+       AND r.is_deleted = FALSE
        AND u.role = 'verified_chef'
        AND r.author_id != $1
      ORDER BY r.created_at DESC`,
+    [session.user.id],
   );
 
-  return NextResponse.json({ recipes: result.rows });
+  const recipes = result.rows;
+  if (recipes.length === 0) return NextResponse.json({ recipes: [] });
+
+  const ids = recipes.map((r: { id: string }) => r.id);
+
+  const stepsResult = await db.query<{ recipe_id: string; step_number: number; instruction: string }>(
+    `SELECT recipe_id, step_number, instruction FROM recipe_steps
+     WHERE recipe_id = ANY($1) ORDER BY recipe_id, step_number`,
+    [ids],
+  );
+
+  const ingredientsResult = await db.query<{ recipe_id: string; ingredient_name: string; quantity: number; unit: string }>(
+    `SELECT ri.recipe_id, i.ingredient_name, ri.quantity, ri.unit
+     FROM recipe_ingredients ri
+     JOIN ingredients i ON i.id = ri.ingredient_id
+     WHERE ri.recipe_id = ANY($1) ORDER BY ri.recipe_id, i.ingredient_name`,
+    [ids],
+  );
+
+  const stepsByRecipe: Record<string, { step_number: number; instruction: string }[]> = {};
+  for (const s of stepsResult.rows) {
+    if (!stepsByRecipe[s.recipe_id]) stepsByRecipe[s.recipe_id] = [];
+    stepsByRecipe[s.recipe_id].push({ step_number: s.step_number, instruction: s.instruction });
+  }
+
+  const ingredientsByRecipe: Record<string, { ingredient_name: string; quantity: number; unit: string }[]> = {};
+  for (const i of ingredientsResult.rows) {
+    if (!ingredientsByRecipe[i.recipe_id]) ingredientsByRecipe[i.recipe_id] = [];
+    ingredientsByRecipe[i.recipe_id].push({ ingredient_name: i.ingredient_name, quantity: i.quantity, unit: i.unit });
+  }
+
+  return NextResponse.json({
+    recipes: recipes.map((r: { id: string }) => ({
+      ...r,
+      steps: stepsByRecipe[r.id] ?? [],
+      ingredients: ingredientsByRecipe[r.id] ?? [],
+    })),
+  });
 }

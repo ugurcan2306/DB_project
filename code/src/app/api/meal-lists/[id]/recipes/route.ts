@@ -20,9 +20,9 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "List not found or not yours." }, { status: 404 });
   }
 
-  const result = await db.query(
-    `SELECT r.id, r.title, r.difficulty, r.cooking_time_minutes, r.servings,
-            u.full_name AS author_name, mlr.added_at
+  const recipesResult = await db.query<{ id: string; title: string; description: string | null; difficulty: string; cooking_time_minutes: number; servings: number; dietary_tags: string[]; cover_image_url: string | null; is_deleted: boolean; author_name: string; added_at: string }>(
+    `SELECT r.id, r.title, r.description, r.difficulty, r.cooking_time_minutes, r.servings,
+            r.dietary_tags, r.cover_image_url, r.is_deleted, u.full_name AS author_name, mlr.added_at
      FROM meal_list_recipes mlr
      JOIN recipes r ON r.id = mlr.recipe_id
      JOIN users u ON u.id = r.author_id
@@ -31,7 +31,45 @@ export async function GET(_request: Request, { params }: Params) {
     [id],
   );
 
-  return NextResponse.json({ recipes: result.rows });
+  const recipes = recipesResult.rows;
+
+  if (recipes.length === 0) return NextResponse.json({ recipes: [] });
+
+  const ids = recipes.map((r) => r.id);
+
+  const stepsResult = await db.query<{ recipe_id: string; step_number: number; instruction: string }>(
+    `SELECT recipe_id, step_number, instruction FROM recipe_steps
+     WHERE recipe_id = ANY($1) ORDER BY recipe_id, step_number`,
+    [ids],
+  );
+
+  const ingredientsResult = await db.query<{ recipe_id: string; ingredient_name: string; quantity: number; unit: string }>(
+    `SELECT ri.recipe_id, i.ingredient_name, ri.quantity, ri.unit
+     FROM recipe_ingredients ri
+     JOIN ingredients i ON i.id = ri.ingredient_id
+     WHERE ri.recipe_id = ANY($1) ORDER BY ri.recipe_id, i.ingredient_name`,
+    [ids],
+  );
+
+  const stepsByRecipe: Record<string, { step_number: number; instruction: string }[]> = {};
+  for (const s of stepsResult.rows) {
+    if (!stepsByRecipe[s.recipe_id]) stepsByRecipe[s.recipe_id] = [];
+    stepsByRecipe[s.recipe_id].push({ step_number: s.step_number, instruction: s.instruction });
+  }
+
+  const ingredientsByRecipe: Record<string, { ingredient_name: string; quantity: number; unit: string }[]> = {};
+  for (const i of ingredientsResult.rows) {
+    if (!ingredientsByRecipe[i.recipe_id]) ingredientsByRecipe[i.recipe_id] = [];
+    ingredientsByRecipe[i.recipe_id].push({ ingredient_name: i.ingredient_name, quantity: i.quantity, unit: i.unit });
+  }
+
+  return NextResponse.json({
+    recipes: recipes.map((r) => ({
+      ...r,
+      steps: stepsByRecipe[r.id] ?? [],
+      ingredients: ingredientsByRecipe[r.id] ?? [],
+    })),
+  });
 }
 
 export async function POST(request: Request, { params }: Params) {
