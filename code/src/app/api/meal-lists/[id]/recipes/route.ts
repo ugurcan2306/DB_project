@@ -20,15 +20,17 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "List not found or not yours." }, { status: 404 });
   }
 
-  const recipesResult = await db.query<{ id: string; title: string; description: string | null; difficulty: string; cooking_time_minutes: number; servings: number; dietary_tags: string[]; cover_image_url: string | null; is_deleted: boolean; author_name: string; added_at: string }>(
+  const recipesResult = await db.query<{ id: string; title: string; description: string | null; difficulty: string; cooking_time_minutes: number; servings: number; dietary_tags: string[]; cover_image_url: string | null; is_deleted: boolean; author_name: string; added_at: string; user_rating: number | null }>(
     `SELECT r.id, r.title, r.description, r.difficulty, r.cooking_time_minutes, r.servings,
-            r.dietary_tags, r.cover_image_url, r.is_deleted, u.full_name AS author_name, mlr.added_at
+            r.dietary_tags, r.cover_image_url, r.is_deleted, u.full_name AS author_name, mlr.added_at,
+            cl.rating AS user_rating
      FROM meal_list_recipes mlr
      JOIN recipes r ON r.id = mlr.recipe_id
      JOIN users u ON u.id = r.author_id
+     LEFT JOIN cook_logs cl ON cl.recipe_id = r.id AND cl.user_id = $2
      WHERE mlr.list_id = $1
      ORDER BY mlr.added_at DESC`,
-    [id],
+    [id, session.user.id],
   );
 
   const recipes = recipesResult.rows;
@@ -103,8 +105,9 @@ export async function POST(request: Request, { params }: Params) {
   }
 
   const recipe = await db.query(
-    `SELECT r.id, r.title, r.difficulty, r.cooking_time_minutes, r.servings,
-            u.full_name AS author_name, NOW() AS added_at
+    `SELECT r.id, r.title, r.description, r.difficulty, r.cooking_time_minutes, r.servings,
+            r.dietary_tags, r.cover_image_url, r.is_deleted,
+            u.full_name AS author_name, NOW() AS added_at, NULL AS user_rating
      FROM recipes r
      JOIN users u ON u.id = r.author_id
      WHERE r.id = $1`,

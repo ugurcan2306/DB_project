@@ -22,6 +22,7 @@ type RecipeInList = {
   cover_image_url: string | null;
   author_name: string;
   is_deleted: boolean;
+  user_rating: number | null;
   steps: { step_number: number; instruction: string }[];
   ingredients: { ingredient_name: string; quantity: number; unit: string }[];
 };
@@ -40,6 +41,9 @@ export function MealListsClient() {
 
   const [deletingList, setDeletingList] = useState<string | null>(null);
   const [deletingRecipe, setDeletingRecipe] = useState<string | null>(null);
+  const [awaitingRating, setAwaitingRating] = useState<Record<string, boolean>>({});
+  const [pendingRating, setPendingRating] = useState<Record<string, number>>({});
+  const [submittingCook, setSubmittingCook] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/meal-lists")
@@ -97,6 +101,29 @@ export function MealListsClient() {
       if (expandedId === listId) setExpandedId(null);
     } finally {
       setDeletingList(null);
+    }
+  }
+
+  async function handleCook(recipeId: string) {
+    const rating = pendingRating[recipeId];
+    if (!rating) return;
+    setSubmittingCook(recipeId);
+    try {
+      const res = await fetch("/api/cook-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipeId, rating }),
+      });
+      if (!res.ok) { alert("Failed to save cook log."); return; }
+      setListRecipes((prev) => {
+        const updated: Record<string, RecipeInList[]> = {};
+        for (const [lid, recipes] of Object.entries(prev)) {
+          updated[lid] = recipes.map((r) => r.id === recipeId ? { ...r, user_rating: rating } : r);
+        }
+        return updated;
+      });
+    } finally {
+      setSubmittingCook(null);
     }
   }
 
@@ -246,6 +273,43 @@ export function MealListsClient() {
                             {recipe.cover_image_url && (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={recipe.cover_image_url} alt={recipe.title} style={{ width: 90, height: 70, objectFit: "cover", borderRadius: 4 }} />
+                            )}
+                            {recipe.user_rating ? (
+                              <p style={{ margin: 0, fontSize: "0.85rem", color: "#065f46" }}>
+                                Cooked — rated {recipe.user_rating}/5
+                              </p>
+                            ) : awaitingRating[recipe.id] ? (
+                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <select
+                                  className="supplier-select"
+                                  value={pendingRating[recipe.id] ?? ""}
+                                  onChange={(e) => setPendingRating((prev) => ({ ...prev, [recipe.id]: Number(e.target.value) }))}
+                                  style={{ width: 70 }}
+                                >
+                                  <option value="">★</option>
+                                  {[1, 2, 3, 4, 5].map((n) => (
+                                    <option key={n} value={n}>{n}</option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  className="btn btn-primary"
+                                  onClick={() => handleCook(recipe.id)}
+                                  disabled={submittingCook === recipe.id || !pendingRating[recipe.id]}
+                                  style={{ whiteSpace: "nowrap" }}
+                                >
+                                  {submittingCook === recipe.id ? "…" : "Submit"}
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn btn-secondary"
+                                onClick={() => setAwaitingRating((prev) => ({ ...prev, [recipe.id]: true }))}
+                                style={{ whiteSpace: "nowrap" }}
+                              >
+                                Cooked
+                              </button>
                             )}
                             <button
                               type="button"

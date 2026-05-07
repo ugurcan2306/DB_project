@@ -315,6 +315,18 @@ SELECT 'Under 20 Minutes', 'Submit 2 recipes with prep + cook under 20 minutes.'
 WHERE NOT EXISTS (SELECT 1 FROM challenges WHERE title = 'Under 20 Minutes');
 
 -- =========================================================
+-- Cook Logs & Ratings
+-- =========================================================
+CREATE TABLE IF NOT EXISTS cook_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  cooked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, recipe_id)
+);
+
+-- =========================================================
 -- Meal Lists
 -- =========================================================
 CREATE TABLE IF NOT EXISTS meal_lists (
