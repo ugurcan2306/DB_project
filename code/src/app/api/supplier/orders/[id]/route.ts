@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/pool";
 import { requireSupplierSession } from "@/lib/supplier-auth";
+import { logSupplierAction } from "@/lib/supplier-history";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await requireSupplierSession();
@@ -12,12 +13,57 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     return NextResponse.json({ error: "status is required." }, { status: 400 });
   }
 
-  await getDb().query(
-    `UPDATE supplier_orders
-     SET status = $1, updated_at = NOW()
-     WHERE id = $2 AND supplier_id = $3`,
-    [body.status, id, session.user.id],
-  );
+  const client = await getDb().connect();
+  try {
+    await client.query("BEGIN");
+    const previous = await client.query<{ status: string }>(
+      `SELECT status
+       FROM supplier_orders
+       WHERE id = $1 AND supplier_id = $2`,
+      [id, session.user.id],
+    );
+
+    if (!previous.rowCount) {
+      await client.query("ROLLBACK");
+      return NextResponse.json({ error: "Order not found." }, { status: 404 });
+    }
+
+    await client.query(
+      `UPDATE supplier_orders
+       SET status = $1, updated_at = NOW()
+       WHERE id = $2 AND supplier_id = $3`,
+      [body.status, id, session.user.id],
+    );
+
+    await logSupplierAction(
+      {
+        supplierId: session.user.id,
+        supplierOrderId: id,
+        actionType: "order_status_update",
+        note: `Order status changed from ${previous.rows[0].status} to ${body.status}.`,
+      },
+      client,
+    );
+
+    if (body.status === "fulfilled") {
+      await logSupplierAction(
+        {
+          supplierId: session.user.id,
+          supplierOrderId: id,
+          actionType: "order_fulfilled",
+          note: "Supplier marked order as fulfilled.",
+        },
+        client,
+      );
+    }
+
+    await client.query("COMMIT");
+  } catch {
+    await client.query("ROLLBACK");
+    return NextResponse.json({ error: "Could not update order status." }, { status: 500 });
+  } finally {
+    client.release();
+  }
 
   return NextResponse.json({ success: true });
 }

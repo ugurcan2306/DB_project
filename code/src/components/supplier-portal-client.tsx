@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 type InventoryItem = {
   id: string;
+  ingredient_id: string;
   ingredient_name: string;
   unit: string;
   unit_price: string;
@@ -107,6 +108,33 @@ export function SupplierPortalClient() {
     await loadAll();
   }
 
+  async function removeIngredient(inventoryItemId: string, ingredientName: string) {
+    const quantityRaw = prompt(`How much "${ingredientName}" stock do you want to remove?`);
+    if (!quantityRaw) return;
+    const quantity = Number(quantityRaw);
+    if (!quantity || quantity <= 0) {
+      setError("Please enter a valid quantity to remove.");
+      return;
+    }
+
+    setError(null);
+    setMessage(null);
+    const response = await fetch(`/api/supplier/inventory/${inventoryItemId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ removeQuantity: quantity }),
+    });
+    const json = (await response.json()) as { error?: string };
+
+    if (!response.ok) {
+      setError(json.error ?? "Could not remove ingredient.");
+      return;
+    }
+
+    setMessage(`Removed ${quantity} of ${ingredientName} from stock.`);
+    await loadAll();
+  }
+
   return (
     <div className="supplier-layout">
       <section className="filter-section">
@@ -202,6 +230,13 @@ export function SupplierPortalClient() {
                   <td>
                     <button type="button" className="btn btn-secondary supplier-action-btn" onClick={() => addBatch(item.id)}>
                       Add Batch
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary supplier-action-btn supplier-remove-btn"
+                      onClick={() => removeIngredient(item.id, item.ingredient_name)}
+                    >
+                      Remove Stock
                     </button>
                   </td>
                 </tr>

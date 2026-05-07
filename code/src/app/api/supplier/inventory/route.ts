@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/pool";
 import { requireSupplierSession } from "@/lib/supplier-auth";
+import { logSupplierAction } from "@/lib/supplier-history";
 
 export async function GET() {
   const session = await requireSupplierSession();
   if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const result = await getDb().query(
-    `SELECT sii.id, i.ingredient_name, sii.unit, sii.unit_price, sii.current_stock, sii.is_active, sii.updated_at
+    `SELECT sii.id, sii.ingredient_id, i.ingredient_name, sii.unit, sii.unit_price, sii.current_stock, sii.is_active, sii.updated_at
      FROM supplier_inventory_items sii
      JOIN ingredients i ON i.id = sii.ingredient_id
      WHERE sii.supplier_id = $1
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
 
     const ingredientId = ingredientResult.rows[0].id;
 
-    const itemResult = await client.query(
+    const itemResult = await client.query<{ id: string }>(
       `INSERT INTO supplier_inventory_items (supplier_id, ingredient_id, unit, unit_price, current_stock)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT (supplier_id, ingredient_id)
@@ -58,10 +59,24 @@ export async function POST(request: Request) {
       [session.user.id, ingredientId, body.unit.trim(), body.unitPrice, body.initialStock],
     );
 
+    const inventoryItemId = itemResult.rows[0].id;
+
     await client.query(
       `INSERT INTO supplier_inventory_batches (inventory_item_id, quantity_added, expires_at, status)
        VALUES ($1, $2, NULL, 'fresh')`,
-      [itemResult.rows[0].id, body.initialStock],
+      [inventoryItemId, body.initialStock],
+    );
+
+    await logSupplierAction(
+      {
+        supplierId: session.user.id,
+        actionType: "initialize_stock",
+        inventoryItemId,
+        ingredientId,
+        quantityChange: body.initialStock,
+        note: `Initialized or increased stock for ${body.ingredientName.trim()}.`,
+      },
+      client,
     );
 
     await client.query("COMMIT");

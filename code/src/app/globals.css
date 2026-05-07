@@ -498,6 +498,21 @@ a {
   font-size: 0.82rem;
   border-width: 1px;
   border-radius: 8px;
+  margin-right: 8px;
+}
+
+.supplier-remove-btn {
+  color: #b42318;
+  border-color: #f1c3bd;
+}
+
+.supplier-remove-btn:hover {
+  background: #fff3f2;
+  color: #8a1c14;
+}
+
+.history-filter-grid {
+  grid-template-columns: 1.2fr 1.6fr 1fr 1fr auto;
 }
 
 .profile-layout {

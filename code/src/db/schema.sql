@@ -102,6 +102,20 @@ CREATE TABLE IF NOT EXISTS supplier_order_items (
   line_total NUMERIC(12,2) NOT NULL CHECK (line_total >= 0)
 );
 
+CREATE TABLE IF NOT EXISTS supplier_inventory_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  supplier_id UUID NOT NULL REFERENCES local_suppliers(user_id) ON DELETE CASCADE,
+  inventory_item_id UUID REFERENCES supplier_inventory_items(id) ON DELETE SET NULL,
+  ingredient_id UUID REFERENCES ingredients(id) ON DELETE SET NULL,
+  supplier_order_id UUID REFERENCES supplier_orders(id) ON DELETE SET NULL,
+  action_type VARCHAR(40) NOT NULL,
+  quantity_change NUMERIC(12,3),
+  note TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_history_supplier_created
+  ON supplier_inventory_history(supplier_id, created_at DESC);
 -- Taxonomy: map specific ingredient names to a canonical ingredient
 -- e.g. "Roma Tomato" -> ingredient_id for "Tomato"
 CREATE TABLE IF NOT EXISTS ingredient_aliases (
