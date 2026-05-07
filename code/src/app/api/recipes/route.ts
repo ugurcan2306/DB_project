@@ -21,6 +21,7 @@ export async function GET() {
 
 type IngredientInput = {
   ingredientId: string;
+  aliasId?: string | null;
   quantity: number;
   unit: string;
 };
@@ -104,8 +105,9 @@ export async function POST(request: Request) {
     for (const ing of body.ingredients) {
       if (!ing.ingredientId || !ing.quantity || !ing.unit) continue;
       await client.query(
-        `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity, unit) VALUES ($1, $2, $3, $4)`,
-        [recipeId, ing.ingredientId, ing.quantity, ing.unit.trim()],
+        `INSERT INTO recipe_ingredients (recipe_id, ingredient_id, alias_id, quantity, unit)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [recipeId, ing.ingredientId, ing.aliasId ?? null, ing.quantity, ing.unit.trim()],
       );
     }
 

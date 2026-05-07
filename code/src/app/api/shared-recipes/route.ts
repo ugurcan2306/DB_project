@@ -43,10 +43,23 @@ export async function GET() {
     [ids],
   );
 
-  const ingredientsResult = await db.query<{ recipe_id: string; ingredient_name: string; quantity: number; unit: string }>(
-    `SELECT ri.recipe_id, i.ingredient_name, ri.quantity, ri.unit
+  const ingredientsResult = await db.query<{
+    recipe_id: string;
+    ingredient_id: string;
+    ingredient_name: string;
+    taxonomy_name: string;
+    quantity: number;
+    unit: string;
+  }>(
+    `SELECT ri.recipe_id,
+            ri.ingredient_id,
+            i.ingredient_name,
+            COALESCE(ia.alias_name, i.ingredient_name) AS taxonomy_name,
+            ri.quantity,
+            ri.unit
      FROM recipe_ingredients ri
      JOIN ingredients i ON i.id = ri.ingredient_id
+     LEFT JOIN ingredient_aliases ia ON ia.id = ri.alias_id
      WHERE ri.recipe_id = ANY($1) ORDER BY ri.recipe_id, i.ingredient_name`,
     [ids],
   );
@@ -57,10 +70,19 @@ export async function GET() {
     stepsByRecipe[s.recipe_id].push({ step_number: s.step_number, instruction: s.instruction });
   }
 
-  const ingredientsByRecipe: Record<string, { ingredient_name: string; quantity: number; unit: string }[]> = {};
+  const ingredientsByRecipe: Record<
+    string,
+    { ingredient_id: string; ingredient_name: string; taxonomy_name: string; quantity: number; unit: string }[]
+  > = {};
   for (const i of ingredientsResult.rows) {
     if (!ingredientsByRecipe[i.recipe_id]) ingredientsByRecipe[i.recipe_id] = [];
-    ingredientsByRecipe[i.recipe_id].push({ ingredient_name: i.ingredient_name, quantity: i.quantity, unit: i.unit });
+    ingredientsByRecipe[i.recipe_id].push({
+      ingredient_id: i.ingredient_id,
+      ingredient_name: i.ingredient_name,
+      taxonomy_name: i.taxonomy_name,
+      quantity: i.quantity,
+      unit: i.unit,
+    });
   }
 
   return NextResponse.json({

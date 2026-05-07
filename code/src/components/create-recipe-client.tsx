@@ -9,8 +9,23 @@ type Ingredient = {
   category_name: string | null;
 };
 
+type IngredientAlias = {
+  id: string;
+  alias_name: string;
+  canonical_ingredient_id: string;
+  canonical_name: string;
+};
+
+type IngredientOption = {
+  value: string; // unique option id (alias/canonical)
+  ingredientId: string; // canonical ingredient id
+  aliasId: string | null;
+  label: string; // taxonomy display label
+};
+
 type IngredientRow = {
   ingredientId: string;
+  aliasId: string | null;
   ingredientName: string;
   quantity: string;
   unit: string;
@@ -31,7 +46,7 @@ const DIETARY_TAGS = [
   { value: "paleo", label: "Paleo" },
 ];
 
-const UNITS = ["g", "kg", "ml", "l", "cup", "tbsp", "tsp", "piece", "slice", "unit", "oz", "lb", "clove", "pinch"];
+const UNITS = ["kg", "g", "ml", "L"];
 
 export function CreateRecipeClient() {
   const router = useRouter();
@@ -48,7 +63,7 @@ export function CreateRecipeClient() {
   const [coverImageUrl, setCoverImageUrl] = useState("");
 
   // Ingredients state
-  const [availableIngredients, setAvailableIngredients] = useState<Ingredient[]>([]);
+  const [availableIngredients, setAvailableIngredients] = useState<IngredientOption[]>([]);
   const [ingredientsLoading, setIngredientsLoading] = useState(true);
   const [selectedIngredientId, setSelectedIngredientId] = useState("");
   const [ingredientQty, setIngredientQty] = useState("");
@@ -70,20 +85,46 @@ export function CreateRecipeClient() {
   const filteredIngredients = useMemo(() => {
     const q = ingredientSearch.trim().toLowerCase();
     if (!q) return availableIngredients;
-    return availableIngredients.filter(
-      (i) =>
-        i.ingredient_name.toLowerCase().includes(q) ||
-        (i.category_name?.toLowerCase().includes(q) ?? false),
-    );
+    return availableIngredients.filter((opt) => opt.label.toLowerCase().includes(q));
   }, [availableIngredients, ingredientSearch]);
 
   useEffect(() => {
-    fetch("/api/ingredients")
-      .then((r) => r.json())
-      .then((data: { ingredients?: Ingredient[] }) => {
-        const list = data.ingredients ?? [];
-        setAvailableIngredients(list);
-        if (list.length) setSelectedIngredientId(list[0].id);
+    Promise.all([
+      fetch("/api/ingredients").then((r) => r.json()),
+      fetch("/api/ingredient-aliases").then((r) => r.json()),
+    ])
+      .then(([ingredientData, aliasData]: [
+        { ingredients?: Ingredient[] },
+        { aliases?: IngredientAlias[] },
+      ]) => {
+        const options: IngredientOption[] = [];
+        const aliases = aliasData.aliases ?? [];
+        const canonicals = ingredientData.ingredients ?? [];
+
+        if (aliases.length > 0) {
+          for (const alias of aliases) {
+            options.push({
+              value: `alias:${alias.id}`,
+              ingredientId: alias.canonical_ingredient_id,
+              aliasId: alias.id,
+              label: `${alias.alias_name} (${alias.canonical_name})`,
+            });
+          }
+        } else {
+          for (const ingredient of canonicals) {
+            options.push({
+              value: `ingredient:${ingredient.id}`,
+              ingredientId: ingredient.id,
+              aliasId: null,
+              label: ingredient.category_name
+                ? `${ingredient.ingredient_name} (${ingredient.category_name})`
+                : ingredient.ingredient_name,
+            });
+          }
+        }
+
+        setAvailableIngredients(options);
+        if (options.length) setSelectedIngredientId(options[0].value);
       })
       .catch(() => setError("Failed to load ingredients."))
       .finally(() => setIngredientsLoading(false));
@@ -135,6 +176,7 @@ export function CreateRecipeClient() {
         setAddedIngredients(
           srcIngredients.map((ing) => ({
             ingredientId: ing.ingredient_id,
+            aliasId: null,
             ingredientName: ing.ingredient_name,
             quantity: String(ing.quantity),
             unit: ing.unit,
@@ -171,22 +213,28 @@ export function CreateRecipeClient() {
       setError("Please enter a valid quantity.");
       return;
     }
-    if (addedIngredients.some((i) => i.ingredientId === selectedIngredientId)) {
+    const found = availableIngredients.find((i) => i.value === selectedIngredientId);
+    if (!found) return;
+    if (addedIngredients.some((i) => i.ingredientId === found.ingredientId && i.aliasId === found.aliasId)) {
       setError("That ingredient is already added.");
       return;
     }
-    const found = availableIngredients.find((i) => i.id === selectedIngredientId);
-    if (!found) return;
     setError("");
     setAddedIngredients((prev) => [
       ...prev,
-      { ingredientId: found.id, ingredientName: found.ingredient_name, quantity: ingredientQty, unit: ingredientUnit },
+      {
+        ingredientId: found.ingredientId,
+        aliasId: found.aliasId,
+        ingredientName: found.label,
+        quantity: ingredientQty,
+        unit: ingredientUnit,
+      },
     ]);
     setIngredientQty("");
   }
 
-  function removeIngredient(id: string) {
-    setAddedIngredients((prev) => prev.filter((i) => i.ingredientId !== id));
+  function removeIngredient(ingredientId: string, aliasId: string | null) {
+    setAddedIngredients((prev) => prev.filter((i) => !(i.ingredientId === ingredientId && i.aliasId === aliasId)));
   }
 
   function addStep() {
@@ -233,6 +281,7 @@ export function CreateRecipeClient() {
           steps,
           ingredients: addedIngredients.map((i) => ({
             ingredientId: i.ingredientId,
+            aliasId: i.aliasId,
             quantity: parseFloat(i.quantity),
             unit: i.unit,
           })),
@@ -427,14 +476,16 @@ export function CreateRecipeClient() {
                       No ingredients match &ldquo;{ingredientSearch}&rdquo;.
                     </p>
                   ) : (
-                    filteredIngredients.map((ing) => {
-                      const alreadyAdded = addedIngredients.some((a) => a.ingredientId === ing.id);
-                      const selected = selectedIngredientId === ing.id;
+                    filteredIngredients.map((opt) => {
+                      const alreadyAdded = addedIngredients.some(
+                        (a) => a.ingredientId === opt.ingredientId && a.aliasId === opt.aliasId,
+                      );
+                      const selected = selectedIngredientId === opt.value;
                       return (
                         <button
-                          key={ing.id}
+                          key={opt.value}
                           type="button"
-                          onClick={() => setSelectedIngredientId(ing.id)}
+                          onClick={() => setSelectedIngredientId(opt.value)}
                           disabled={alreadyAdded}
                           style={{
                             display: "flex",
@@ -451,14 +502,7 @@ export function CreateRecipeClient() {
                             textAlign: "left",
                           }}
                         >
-                          <span>
-                            {ing.ingredient_name}
-                            {ing.category_name && (
-                              <span style={{ color: "#999", fontSize: "0.78rem" }}>
-                                {" "}· {ing.category_name}
-                              </span>
-                            )}
-                          </span>
+                          <span>{opt.label}</span>
                           {alreadyAdded && (
                             <span style={{ color: "#27ae60", fontSize: "0.72rem" }}>✓ added</span>
                           )}
@@ -520,7 +564,7 @@ export function CreateRecipeClient() {
               </thead>
               <tbody>
                 {addedIngredients.map((ing) => (
-                  <tr key={ing.ingredientId}>
+                  <tr key={`${ing.ingredientId}-${ing.aliasId ?? "canonical"}`}>
                     <td>{ing.ingredientName}</td>
                     <td>{ing.quantity}</td>
                     <td>{ing.unit}</td>
@@ -528,7 +572,7 @@ export function CreateRecipeClient() {
                       <button
                         type="button"
                         className="btn btn-secondary supplier-action-btn"
-                        onClick={() => removeIngredient(ing.ingredientId)}
+                        onClick={() => removeIngredient(ing.ingredientId, ing.aliasId)}
                       >
                         Remove
                       </button>
