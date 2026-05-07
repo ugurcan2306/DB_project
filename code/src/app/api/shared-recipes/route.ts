@@ -18,6 +18,12 @@ export async function GET() {
        AND r.is_deleted = FALSE
        AND u.role = 'verified_chef'
        AND r.author_id != $1
+       AND r.id NOT IN (
+         SELECT mlr.recipe_id
+         FROM meal_list_recipes mlr
+         JOIN meal_lists ml ON ml.id = mlr.list_id
+         WHERE ml.user_id = $1
+       )
      ORDER BY r.created_at DESC`,
     [session.user.id],
   );
