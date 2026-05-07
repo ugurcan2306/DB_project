@@ -1,6 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import AsyncSelect from "react-select/async";
+
+type IngredientAliasOption = { id: string; alias_name: string };
+type AliasSelectOption = { value: string; label: string };
 
 type InventoryItem = {
   id: string;
@@ -24,12 +28,42 @@ const ORDER_STATUSES: SupplierOrder["status"][] = ["pending", "accepted", "packe
 export function SupplierPortalClient() {
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [orders, setOrders] = useState<SupplierOrder[]>([]);
-  const [newIngredient, setNewIngredient] = useState("");
+  const [defaultAliasOptions, setDefaultAliasOptions] = useState<AliasSelectOption[]>([]);
+  const [selectedAlias, setSelectedAlias] = useState<AliasSelectOption | null>(null);
   const [newUnit, setNewUnit] = useState("kg");
   const [newPrice, setNewPrice] = useState("");
   const [newStock, setNewStock] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const selectStyles = useMemo(
+    () => ({
+      control: (base: Record<string, unknown>, state: { isFocused: boolean }) => ({
+        ...base,
+        backgroundColor: "#faf8f5",
+        borderColor: state.isFocused ? "#e07b39" : "#e8e0d8",
+        borderWidth: 2,
+        borderRadius: 10,
+        minHeight: 44,
+        boxShadow: "none",
+        cursor: "text",
+      }),
+      menu: (base: Record<string, unknown>) => ({
+        ...base,
+        borderRadius: 12,
+        border: "1px solid #f0ebe5",
+        boxShadow: "0 18px 40px rgba(0, 0, 0, 0.12)",
+        overflow: "hidden",
+      }),
+      option: (base: Record<string, unknown>, state: { isFocused: boolean; isSelected: boolean }) => ({
+        ...base,
+        backgroundColor: state.isSelected ? "#ffe7d6" : state.isFocused ? "#fff7ee" : "#ffffff",
+        color: "#2d2d2d",
+        cursor: "pointer",
+      }),
+    }),
+    [],
+  );
 
   async function loadAll() {
     const [inventoryRes, ordersRes] = await Promise.all([fetch("/api/supplier/inventory"), fetch("/api/supplier/orders")]);
@@ -44,6 +78,9 @@ export function SupplierPortalClient() {
     const init = async () => {
       try {
         await loadAll();
+        const aliasesRes = await fetch("/api/ingredient-aliases");
+        const aliasesJson = (await aliasesRes.json()) as { aliases?: IngredientAliasOption[] };
+        if (active) setDefaultAliasOptions((aliasesJson.aliases ?? []).map((a) => ({ value: a.alias_name, label: a.alias_name })));
       } catch {
         if (active) {
           setError("Failed to load supplier data.");
@@ -56,10 +93,22 @@ export function SupplierPortalClient() {
     };
   }, []);
 
+  async function loadAliasOptions(inputValue: string): Promise<AliasSelectOption[]> {
+    const trimmed = inputValue.trim();
+    const url = trimmed ? `/api/ingredient-aliases?q=${encodeURIComponent(trimmed)}` : "/api/ingredient-aliases";
+    const res = await fetch(url);
+    const json = (await res.json()) as { aliases?: IngredientAliasOption[]; error?: string };
+    if (!res.ok) {
+      setError(json.error ?? "Failed to load ingredient aliases.");
+      return [];
+    }
+    return (json.aliases ?? []).map((a) => ({ value: a.alias_name, label: a.alias_name }));
+  }
+
   async function addInventoryItem() {
     setError(null);
     setMessage(null);
-    if (!newIngredient.trim() || !newUnit.trim() || !newPrice || !newStock) {
+    if (!selectedAlias?.value || !newUnit.trim() || !newPrice || !newStock) {
       setError("Please fill all inventory fields before adding.");
       return;
     }
@@ -68,7 +117,7 @@ export function SupplierPortalClient() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ingredientName: newIngredient,
+        ingredientName: selectedAlias.value,
         unit: newUnit,
         unitPrice: Number(newPrice),
         initialStock: Number(newStock),
@@ -80,7 +129,7 @@ export function SupplierPortalClient() {
       return;
     }
     setMessage("Inventory item added/updated.");
-    setNewIngredient("");
+    setSelectedAlias(null);
     setNewPrice("");
     setNewStock("");
     await loadAll();
@@ -143,16 +192,29 @@ export function SupplierPortalClient() {
 
         <div className="supplier-form-grid">
           <div className="supplier-field">
-            <label className="supplier-label" htmlFor="ingredientName">
-              Ingredient Name
+            <label className="supplier-label" htmlFor="ingredientAlias">
+              Ingredient (Taxonomy Alias)
             </label>
-            <input
-              id="ingredientName"
-              className="supplier-input"
-              placeholder="e.g. Roma Tomato"
-              value={newIngredient}
-              onChange={(event) => setNewIngredient(event.target.value)}
-            />
+            <div style={{ marginTop: 6 }}>
+              <AsyncSelect
+                instanceId="ingredientAlias"
+                inputId="ingredientAlias"
+                value={selectedAlias}
+                defaultOptions={defaultAliasOptions}
+                loadOptions={loadAliasOptions}
+                onChange={(opt) => {
+                  setError(null);
+                  setMessage(null);
+                  setSelectedAlias(opt as AliasSelectOption | null);
+                }}
+                isClearable
+                placeholder="Select an ingredient alias…"
+                noOptionsMessage={({ inputValue }) =>
+                  inputValue.trim() ? "No matches. Ask an admin to add/map it." : "No aliases yet."
+                }
+                styles={selectStyles as never}
+              />
+            </div>
           </div>
           <div className="supplier-field">
             <label className="supplier-label" htmlFor="unitSelect">

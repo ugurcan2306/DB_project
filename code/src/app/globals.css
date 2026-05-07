@@ -439,6 +439,17 @@ a {
   font-size: 0.92rem;
 }
 
+.supplier-inline {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.supplier-search-btn {
+  padding: 10px 16px;
+  white-space: nowrap;
+}
+
 .supplier-input::placeholder {
   color: #9a8e82;
   opacity: 1;

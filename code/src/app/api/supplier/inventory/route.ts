@@ -25,27 +25,76 @@ export async function POST(request: Request) {
 
   const body = (await request.json()) as {
     ingredientName?: string;
+    ingredientId?: string;
     unit?: string;
     unitPrice?: number;
     initialStock?: number;
   };
 
-  if (!body.ingredientName || !body.unit || body.unitPrice == null || body.initialStock == null) {
+  if ((!body.ingredientName && !body.ingredientId) || !body.unit || body.unitPrice == null || body.initialStock == null) {
     return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
   }
+
+  const inputName = body.ingredientName?.trim() ?? "";
 
   const client = await getDb().connect();
   try {
     await client.query("BEGIN");
-    const ingredientResult = await client.query<{ id: string }>(
-      `INSERT INTO ingredients (ingredient_name)
-       VALUES ($1)
-       ON CONFLICT (ingredient_name) DO UPDATE SET ingredient_name = EXCLUDED.ingredient_name
-       RETURNING id`,
-      [body.ingredientName.trim()],
-    );
+    // Preferred: canonical ingredient selection by id (UI selects from namespace).
+    // Fallback: resolve strictly via alias/canonical name match (backward compatible).
+    let ingredientId: string | null = body.ingredientId?.trim() || null;
+    let resolvedNameForNote = inputName;
 
-    const ingredientId = ingredientResult.rows[0].id;
+    if (ingredientId) {
+      const canonical = await client.query<{ ingredient_name: string }>(
+        `SELECT ingredient_name FROM ingredients WHERE id = $1`,
+        [ingredientId],
+      );
+      if (!canonical.rowCount) {
+        await client.query("ROLLBACK");
+        return NextResponse.json({ error: "Selected ingredient does not exist." }, { status: 400 });
+      }
+      resolvedNameForNote = canonical.rows[0].ingredient_name;
+    } else {
+      if (!inputName) {
+        await client.query("ROLLBACK");
+        return NextResponse.json({ error: "Ingredient is required." }, { status: 400 });
+      }
+
+      const aliasMatch = await client.query<{ canonical_ingredient_id: string; alias_name: string }>(
+        `SELECT canonical_ingredient_id, alias_name
+         FROM ingredient_aliases
+         WHERE LOWER(alias_name) = LOWER($1)
+         LIMIT 1`,
+        [inputName],
+      );
+
+      ingredientId = aliasMatch.rows[0]?.canonical_ingredient_id ?? null;
+
+      if (!ingredientId) {
+        const canonicalMatch = await client.query<{ id: string; ingredient_name: string }>(
+          `SELECT id, ingredient_name
+           FROM ingredients
+           WHERE LOWER(ingredient_name) = LOWER($1)
+           LIMIT 1`,
+          [inputName],
+        );
+        ingredientId = canonicalMatch.rows[0]?.id ?? null;
+        if (canonicalMatch.rowCount) {
+          resolvedNameForNote = canonicalMatch.rows[0].ingredient_name;
+        }
+      }
+
+      if (!ingredientId) {
+        await client.query("ROLLBACK");
+        return NextResponse.json(
+          {
+            error: "Ingredient not found in taxonomy. Please search and select from the list.",
+          },
+          { status: 400 },
+        );
+      }
+    }
 
     const itemResult = await client.query<{ id: string }>(
       `INSERT INTO supplier_inventory_items (supplier_id, ingredient_id, unit, unit_price, current_stock)
@@ -74,7 +123,7 @@ export async function POST(request: Request) {
         inventoryItemId,
         ingredientId,
         quantityChange: body.initialStock,
-        note: `Initialized or increased stock for ${body.ingredientName.trim()}.`,
+        note: `Initialized or increased stock for ${resolvedNameForNote}.`,
       },
       client,
     );
