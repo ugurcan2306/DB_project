@@ -337,6 +337,22 @@ CREATE TABLE IF NOT EXISTS meal_lists (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- =========================================================
+-- Follows (Home Cooks ↔ Verified Chefs)
+-- A user can follow a verified chef. The "Following Feed"
+-- displays the recent recipes published by followed chefs.
+-- =========================================================
+CREATE TABLE IF NOT EXISTS follows (
+  follower_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  followed_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (follower_id, followed_id),
+  CHECK (follower_id <> followed_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_follows_follower ON follows(follower_id);
+CREATE INDEX IF NOT EXISTS idx_follows_followed ON follows(followed_id);
+
 CREATE TABLE IF NOT EXISTS meal_list_recipes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   list_id UUID NOT NULL REFERENCES meal_lists(id) ON DELETE CASCADE,
