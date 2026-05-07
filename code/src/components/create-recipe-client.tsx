@@ -159,7 +159,7 @@ export function CreateRecipeClient() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/recipes/my");
     } catch {
       setError("Something went wrong. Please try again.");
     } finally {
