@@ -24,7 +24,7 @@ export function AppNavbar({
   activePath,
   user,
 }: {
-  activePath: "discover" | "dashboard" | "supplier" | "supplier_history" | "challenges" | "profile" | "login" | "register" | "admin" | "create-recipe";
+  activePath: "discover" | "dashboard" | "supplier" | "supplier_history" | "challenges" | "profile" | "login" | "register" | "admin" | "create-recipe" | "my-recipes" | "meal-lists" | "shared-recipes";
   user?: NavbarUser | null;
 }) {
   return (
@@ -54,9 +54,20 @@ export function AppNavbar({
             Dashboard
           </Link>
           {(user.role === "home_cook" || user.role === "verified_chef") ? (
-            <Link href="/recipes/create" className={activePath === "create-recipe" ? "active" : ""}>
-              Create Recipe
-            </Link>
+            <>
+              <Link href="/recipes/my" className={activePath === "my-recipes" ? "active" : ""}>
+                My Recipes
+              </Link>
+              <Link href="/recipes/create" className={activePath === "create-recipe" ? "active" : ""}>
+                Create Recipe
+              </Link>
+              <Link href="/meal-lists" className={activePath === "meal-lists" ? "active" : ""}>
+                Meal Lists
+              </Link>
+              <Link href="/shared-recipes" className={activePath === "shared-recipes" ? "active" : ""}>
+                Shared Recipes
+              </Link>
+            </>
           ) : null}
           <Link href="/challenges" className={activePath === "challenges" ? "active" : ""}>
             Challenges

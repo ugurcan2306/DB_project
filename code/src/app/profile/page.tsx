@@ -7,6 +7,8 @@ import { ProfileSettingsClient } from "@/components/profile-settings-client";
 import { AppNavbar } from "@/components/app-navbar";
 import { getUserBadges, getUserRecipeHistory, getUserChallengeStats } from "@/lib/challenges";
 import { RecipeHistoryList } from "@/components/recipe-history-list";
+import { getChefRatings, getChefAllTimeStats } from "@/lib/cook-logs";
+import type { ChefRecipeRating, ChefAllTimeStats } from "@/lib/cook-logs";
 
 function initialsFromName(name: string) {
   return name
@@ -28,10 +30,12 @@ export default async function ProfilePage() {
     redirect("/dashboard");
   }
 
-  const [badges, recipeHistory, stats] = await Promise.all([
+  const [badges, recipeHistory, stats, chefRatings, chefAllTime] = await Promise.all([
     getUserBadges(session.user.id),
     getUserRecipeHistory(session.user.id),
     getUserChallengeStats(session.user.id),
+    profile.role === "verified_chef" ? getChefRatings(session.user.id) : Promise.resolve([] as ChefRecipeRating[]),
+    profile.role === "verified_chef" ? getChefAllTimeStats(session.user.id) : Promise.resolve(null as ChefAllTimeStats | null),
   ]);
 
   return (
@@ -119,9 +123,49 @@ export default async function ProfilePage() {
         {/* Recipe History */}
         <section className="filter-section">
           <h2 className="profile-section-title">📋 Recipe History</h2>
-
           <RecipeHistoryList recipes={recipeHistory} />
         </section>
+
+        {/* Chef Ratings */}
+        {profile.role === "verified_chef" && (
+          <section className="filter-section">
+            <h2 className="profile-section-title">⭐ Recipe Ratings</h2>
+            {chefAllTime && (chefAllTime.total_cook_count > 0) && (
+              <div className="profile-stats-row" style={{ marginBottom: "1rem" }}>
+                <div className="profile-stat">
+                  <span className="profile-stat-value">{chefAllTime.total_cook_count}</span>
+                  <span className="profile-stat-label">All-Time Cooks</span>
+                </div>
+                <div className="profile-stat">
+                  <span className="profile-stat-value">{chefAllTime.overall_avg_rating ?? "—"} / 5</span>
+                  <span className="profile-stat-label">All-Time Avg Rating</span>
+                </div>
+              </div>
+            )}
+            {chefRatings.length === 0 ? (
+              <p className="profile-empty">No ratings yet — share your recipes so users can cook and rate them.</p>
+            ) : (
+              <table className="supplier-table">
+                <thead>
+                  <tr>
+                    <th>Recipe</th>
+                    <th>Times Cooked</th>
+                    <th>Avg Rating</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {chefRatings.map((r) => (
+                    <tr key={r.id}>
+                      <td>{r.title}</td>
+                      <td>{r.cook_count}</td>
+                      <td>{r.avg_rating !== null ? `${r.avg_rating} / 5` : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        )}
       </main>
     </>
   );

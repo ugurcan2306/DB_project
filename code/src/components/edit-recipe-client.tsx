@@ -33,10 +33,9 @@ const DIETARY_TAGS = [
 
 const UNITS = ["g", "kg", "ml", "l", "cup", "tbsp", "tsp", "piece", "slice", "unit", "oz", "lb", "clove", "pinch"];
 
-export function CreateRecipeClient() {
+export function EditRecipeClient({ recipeId }: { recipeId: string }) {
   const router = useRouter();
 
-  // Metadata state
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [servings, setServings] = useState("2");
@@ -45,7 +44,6 @@ export function CreateRecipeClient() {
   const [dietaryTags, setDietaryTags] = useState<string[]>([]);
   const [coverImageUrl, setCoverImageUrl] = useState("");
 
-  // Ingredients state
   const [availableIngredients, setAvailableIngredients] = useState<Ingredient[]>([]);
   const [ingredientsLoading, setIngredientsLoading] = useState(true);
   const [selectedIngredientId, setSelectedIngredientId] = useState("");
@@ -53,24 +51,66 @@ export function CreateRecipeClient() {
   const [ingredientUnit, setIngredientUnit] = useState("g");
   const [addedIngredients, setAddedIngredients] = useState<IngredientRow[]>([]);
 
-  // Steps state
   const [currentStep, setCurrentStep] = useState("");
   const [steps, setSteps] = useState<StepRow[]>([]);
 
-  // Form state
+  const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetch("/api/ingredients")
-      .then((r) => r.json())
-      .then((data: { ingredients?: Ingredient[] }) => {
-        setAvailableIngredients(data.ingredients ?? []);
-        if (data.ingredients?.length) setSelectedIngredientId(data.ingredients[0].id);
+    Promise.all([
+      fetch("/api/ingredients").then((r) => r.json()),
+      fetch(`/api/recipes/${recipeId}`).then((r) => r.json()),
+    ])
+      .then(([ingData, recipeData]: [
+        { ingredients?: Ingredient[] },
+        {
+          recipe?: {
+            title: string; description: string | null; servings: number;
+            cooking_time_minutes: number; difficulty: string;
+            dietary_tags: string[]; cover_image_url: string | null;
+          };
+          steps?: { step_number: number; instruction: string }[];
+          ingredients?: { ingredient_id: string; ingredient_name: string; quantity: number; unit: string }[];
+          error?: string;
+        }
+      ]) => {
+        const allIngs = ingData.ingredients ?? [];
+        setAvailableIngredients(allIngs);
+        if (allIngs.length) setSelectedIngredientId(allIngs[0].id);
+
+        if (recipeData.error) {
+          setError(recipeData.error);
+          return;
+        }
+
+        const r = recipeData.recipe!;
+        setTitle(r.title);
+        setDescription(r.description ?? "");
+        setServings(String(r.servings));
+        setCookingTime(String(r.cooking_time_minutes));
+        setDifficulty(r.difficulty);
+        setDietaryTags(r.dietary_tags ?? []);
+        setCoverImageUrl(r.cover_image_url ?? "");
+
+        setSteps((recipeData.steps ?? []).map((s) => ({ instruction: s.instruction })));
+
+        setAddedIngredients(
+          (recipeData.ingredients ?? []).map((i) => ({
+            ingredientId: i.ingredient_id,
+            ingredientName: i.ingredient_name,
+            quantity: String(i.quantity),
+            unit: i.unit,
+          })),
+        );
       })
-      .catch(() => setError("Failed to load ingredients."))
-      .finally(() => setIngredientsLoading(false));
-  }, []);
+      .catch(() => setError("Failed to load recipe data."))
+      .finally(() => {
+        setIngredientsLoading(false);
+        setPageLoading(false);
+      });
+  }, [recipeId]);
 
   function toggleTag(value: string) {
     setDietaryTags((prev) =>
@@ -133,8 +173,8 @@ export function CreateRecipeClient() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/recipes", {
-        method: "POST",
+      const res = await fetch(`/api/recipes/${recipeId}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: title.trim(),
@@ -153,12 +193,11 @@ export function CreateRecipeClient() {
         }),
       });
 
-      const data = (await res.json()) as { success?: boolean; error?: string; recipeId?: string };
+      const data = (await res.json()) as { success?: boolean; error?: string };
       if (!res.ok) {
-        setError(data.error ?? "Failed to create recipe.");
+        setError(data.error ?? "Failed to update recipe.");
         return;
       }
-
       router.push("/recipes/my");
     } catch {
       setError("Something went wrong. Please try again.");
@@ -167,60 +206,32 @@ export function CreateRecipeClient() {
     }
   }
 
+  if (pageLoading) return <p>Loading recipe…</p>;
+  if (error && !title) return <p style={{ color: "red" }}>{error}</p>;
+
   return (
     <form onSubmit={handleSubmit} className="recipe-form-layout">
-      {/* ── Section 1: Metadata ── */}
       <section className="filter-section">
         <h2 className="recipe-section-title">Recipe Details</h2>
 
         <div className="form-group auth-field">
           <label htmlFor="recipe-title">Title *</label>
-          <input
-            id="recipe-title"
-            type="text"
-            placeholder="e.g. Creamy Tuscan Pasta"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={255}
-          />
+          <input id="recipe-title" type="text" placeholder="e.g. Creamy Tuscan Pasta" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={255} />
         </div>
 
         <div className="form-group auth-field">
           <label htmlFor="recipe-desc">Description</label>
-          <textarea
-            id="recipe-desc"
-            rows={3}
-            placeholder="A short description of your recipe..."
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            style={{ resize: "vertical" }}
-          />
+          <textarea id="recipe-desc" rows={3} placeholder="A short description…" value={description} onChange={(e) => setDescription(e.target.value)} style={{ resize: "vertical" }} />
         </div>
 
         <div className="form-row">
           <div className="form-group">
             <label htmlFor="recipe-servings">Servings *</label>
-            <input
-              id="recipe-servings"
-              type="number"
-              min={1}
-              max={100}
-              placeholder="2"
-              value={servings}
-              onChange={(e) => setServings(e.target.value)}
-            />
+            <input id="recipe-servings" type="number" min={1} max={100} value={servings} onChange={(e) => setServings(e.target.value)} />
           </div>
           <div className="form-group">
             <label htmlFor="recipe-time">Cooking Time (minutes) *</label>
-            <input
-              id="recipe-time"
-              type="number"
-              min={1}
-              max={1440}
-              placeholder="30"
-              value={cookingTime}
-              onChange={(e) => setCookingTime(e.target.value)}
-            />
+            <input id="recipe-time" type="number" min={1} max={1440} value={cookingTime} onChange={(e) => setCookingTime(e.target.value)} />
           </div>
         </div>
 
@@ -228,12 +239,7 @@ export function CreateRecipeClient() {
           <label>Difficulty *</label>
           <div className="chip-group">
             {(["easy", "medium", "hard"] as const).map((d) => (
-              <button
-                key={d}
-                type="button"
-                className={`chip ${difficulty === d ? "active" : ""}`}
-                onClick={() => setDifficulty(d)}
-              >
+              <button key={d} type="button" className={`chip ${difficulty === d ? "active" : ""}`} onClick={() => setDifficulty(d)}>
                 {d.charAt(0).toUpperCase() + d.slice(1)}
               </button>
             ))}
@@ -244,12 +250,7 @@ export function CreateRecipeClient() {
           <label>Dietary Tags</label>
           <div className="chip-group">
             {DIETARY_TAGS.map((tag) => (
-              <button
-                key={tag.value}
-                type="button"
-                className={`chip ${dietaryTags.includes(tag.value) ? "active" : ""}`}
-                onClick={() => toggleTag(tag.value)}
-              >
+              <button key={tag.value} type="button" className={`chip ${dietaryTags.includes(tag.value) ? "active" : ""}`} onClick={() => toggleTag(tag.value)}>
                 {tag.label}
               </button>
             ))}
@@ -258,22 +259,12 @@ export function CreateRecipeClient() {
 
         <div className="form-group auth-field">
           <label htmlFor="recipe-cover">Cover Image URL</label>
-          <input
-            id="recipe-cover"
-            type="url"
-            placeholder="https://example.com/image.jpg"
-            value={coverImageUrl}
-            onChange={(e) => setCoverImageUrl(e.target.value)}
-          />
+          <input id="recipe-cover" type="url" placeholder="https://example.com/image.jpg" value={coverImageUrl} onChange={(e) => setCoverImageUrl(e.target.value)} />
         </div>
       </section>
 
-      {/* ── Section 2: Ingredients (Taxonomy) ── */}
       <section className="filter-section">
         <h2 className="recipe-section-title">Ingredients</h2>
-        <p className="recipe-section-hint">
-          Select from standardized ingredients to ensure proper supplier matching.
-        </p>
 
         <div className="recipe-ingredient-row">
           <div className="form-group" style={{ flex: 2 }}>
@@ -281,15 +272,10 @@ export function CreateRecipeClient() {
             {ingredientsLoading ? (
               <p className="recipe-loading">Loading ingredients…</p>
             ) : (
-              <select
-                value={selectedIngredientId}
-                onChange={(e) => setSelectedIngredientId(e.target.value)}
-                className="supplier-select"
-              >
+              <select value={selectedIngredientId} onChange={(e) => setSelectedIngredientId(e.target.value)} className="supplier-select">
                 {availableIngredients.map((ing) => (
                   <option key={ing.id} value={ing.id}>
-                    {ing.ingredient_name}
-                    {ing.category_name ? ` (${ing.category_name})` : ""}
+                    {ing.ingredient_name}{ing.category_name ? ` (${ing.category_name})` : ""}
                   </option>
                 ))}
               </select>
@@ -297,36 +283,17 @@ export function CreateRecipeClient() {
           </div>
           <div className="form-group" style={{ flex: 1 }}>
             <label>Quantity *</label>
-            <input
-              type="number"
-              min={0.001}
-              step={0.001}
-              placeholder="200"
-              value={ingredientQty}
-              onChange={(e) => setIngredientQty(e.target.value)}
-              className="supplier-input"
-            />
+            <input type="number" min={0.001} step={0.001} placeholder="200" value={ingredientQty} onChange={(e) => setIngredientQty(e.target.value)} className="supplier-input" />
           </div>
           <div className="form-group" style={{ flex: 1 }}>
             <label>Unit *</label>
-            <select
-              value={ingredientUnit}
-              onChange={(e) => setIngredientUnit(e.target.value)}
-              className="supplier-select"
-            >
-              {UNITS.map((u) => (
-                <option key={u} value={u}>{u}</option>
-              ))}
+            <select value={ingredientUnit} onChange={(e) => setIngredientUnit(e.target.value)} className="supplier-select">
+              {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
           <div className="form-group recipe-add-btn-wrap">
             <label>&nbsp;</label>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={addIngredient}
-              disabled={ingredientsLoading || !availableIngredients.length}
-            >
+            <button type="button" className="btn btn-secondary" onClick={addIngredient} disabled={ingredientsLoading || !availableIngredients.length}>
               + Add
             </button>
           </div>
@@ -335,44 +302,22 @@ export function CreateRecipeClient() {
         {addedIngredients.length > 0 && (
           <div className="recipe-list-wrap">
             <table className="supplier-table">
-              <thead>
-                <tr>
-                  <th>Ingredient</th>
-                  <th>Quantity</th>
-                  <th>Unit</th>
-                  <th></th>
-                </tr>
-              </thead>
+              <thead><tr><th>Ingredient</th><th>Quantity</th><th>Unit</th><th></th></tr></thead>
               <tbody>
                 {addedIngredients.map((ing) => (
                   <tr key={ing.ingredientId}>
                     <td>{ing.ingredientName}</td>
                     <td>{ing.quantity}</td>
                     <td>{ing.unit}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn-secondary supplier-action-btn"
-                        onClick={() => removeIngredient(ing.ingredientId)}
-                      >
-                        Remove
-                      </button>
-                    </td>
+                    <td><button type="button" className="btn btn-secondary supplier-action-btn" onClick={() => removeIngredient(ing.ingredientId)}>Remove</button></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-
-        {availableIngredients.length === 0 && !ingredientsLoading && (
-          <p className="recipe-empty-hint">
-            No ingredients in the system yet. Ask an admin to add ingredients first.
-          </p>
-        )}
       </section>
 
-      {/* ── Section 3: Preparation Steps ── */}
       <section className="filter-section">
         <h2 className="recipe-section-title">Preparation Steps</h2>
 
@@ -380,30 +325,15 @@ export function CreateRecipeClient() {
           <div className="form-group" style={{ flex: 1 }}>
             <label htmlFor="step-input">Step instruction *</label>
             <textarea
-              id="step-input"
-              rows={2}
-              placeholder="e.g. Bring a large pot of salted water to a boil..."
-              value={currentStep}
-              onChange={(e) => setCurrentStep(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  addStep();
-                }
-              }}
+              id="step-input" rows={2} placeholder="e.g. Bring a large pot of salted water to a boil…"
+              value={currentStep} onChange={(e) => setCurrentStep(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); addStep(); } }}
               style={{ resize: "vertical" }}
             />
           </div>
           <div className="form-group recipe-add-btn-wrap">
             <label>&nbsp;</label>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={addStep}
-              disabled={!currentStep.trim()}
-            >
-              + Add Step
-            </button>
+            <button type="button" className="btn btn-secondary" onClick={addStep} disabled={!currentStep.trim()}>+ Add Step</button>
           </div>
         </div>
 
@@ -414,31 +344,9 @@ export function CreateRecipeClient() {
                 <span className="recipe-step-num">{i + 1}</span>
                 <span className="recipe-step-text">{step.instruction}</span>
                 <div className="recipe-step-actions">
-                  <button
-                    type="button"
-                    className="btn btn-secondary supplier-action-btn"
-                    onClick={() => moveStep(i, "up")}
-                    disabled={i === 0}
-                    title="Move up"
-                  >
-                    ↑
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary supplier-action-btn"
-                    onClick={() => moveStep(i, "down")}
-                    disabled={i === steps.length - 1}
-                    title="Move down"
-                  >
-                    ↓
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-secondary supplier-action-btn"
-                    onClick={() => removeStep(i)}
-                  >
-                    Remove
-                  </button>
+                  <button type="button" className="btn btn-secondary supplier-action-btn" onClick={() => moveStep(i, "up")} disabled={i === 0} title="Move up">↑</button>
+                  <button type="button" className="btn btn-secondary supplier-action-btn" onClick={() => moveStep(i, "down")} disabled={i === steps.length - 1} title="Move down">↓</button>
+                  <button type="button" className="btn btn-secondary supplier-action-btn" onClick={() => removeStep(i)}>Remove</button>
                 </div>
               </li>
             ))}
@@ -446,15 +354,13 @@ export function CreateRecipeClient() {
         )}
       </section>
 
-      {/* ── Submit ── */}
       {error && <p className="error-text">{error}</p>}
       <div className="recipe-submit-row">
-        <button
-          type="submit"
-          className="btn btn-primary btn-large"
-          disabled={submitting}
-        >
-          {submitting ? "Publishing…" : "Publish Recipe"}
+        <button type="button" className="btn btn-secondary" onClick={() => router.push("/recipes/my")} disabled={submitting}>
+          Cancel
+        </button>
+        <button type="submit" className="btn btn-primary btn-large" disabled={submitting}>
+          {submitting ? "Saving…" : "Save Changes"}
         </button>
       </div>
     </form>

@@ -151,6 +151,7 @@ CREATE TABLE IF NOT EXISTS recipes (
   dietary_tags TEXT[] NOT NULL DEFAULT '{}',
   cover_image_url TEXT,
   is_published BOOLEAN NOT NULL DEFAULT TRUE,
+  is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -312,3 +313,33 @@ SELECT 'Under 20 Minutes', 'Submit 2 recipes with prep + cook under 20 minutes.'
        NOW() + INTERVAL '6 days', 2, 'quick',
        (SELECT id FROM badges WHERE badge_name = 'Speed Cook'), 200
 WHERE NOT EXISTS (SELECT 1 FROM challenges WHERE title = 'Under 20 Minutes');
+
+-- =========================================================
+-- Cook Logs & Ratings
+-- =========================================================
+CREATE TABLE IF NOT EXISTS cook_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  cooked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (user_id, recipe_id)
+);
+
+-- =========================================================
+-- Meal Lists
+-- =========================================================
+CREATE TABLE IF NOT EXISTS meal_lists (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS meal_list_recipes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  list_id UUID NOT NULL REFERENCES meal_lists(id) ON DELETE CASCADE,
+  recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  added_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
