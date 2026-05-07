@@ -236,6 +236,56 @@ export async function getUserRecipeHistory(userId: string): Promise<RecipeLogRow
   return result.rows;
 }
 
+// ── Admin CRUD ──────────────────────────────────────────────────────────────
+
+export async function listAllChallenges(): Promise<ChallengeRow[]> {
+  const result = await getDb().query<ChallengeRow>(
+    `${CHALLENGE_BASE_SELECT}
+     ORDER BY c.ends_at DESC`,
+  );
+  return result.rows;
+}
+
+export async function createChallenge(data: {
+  title: string;
+  description: string;
+  emoji: string;
+  ends_at: string;
+  target_count: number;
+  required_tag: string | null;
+  reward_points: number;
+}) {
+  await getDb().query(
+    `INSERT INTO challenges (title, description, emoji, ends_at, target_count, required_tag, reward_points)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+    [data.title, data.description, data.emoji, data.ends_at, data.target_count, data.required_tag || null, data.reward_points],
+  );
+}
+
+export async function updateChallenge(
+  id: string,
+  data: {
+    title: string;
+    description: string;
+    emoji: string;
+    ends_at: string;
+    target_count: number;
+    required_tag: string | null;
+    reward_points: number;
+  },
+) {
+  await getDb().query(
+    `UPDATE challenges
+     SET title=$1, description=$2, emoji=$3, ends_at=$4, target_count=$5, required_tag=$6, reward_points=$7
+     WHERE id=$8`,
+    [data.title, data.description, data.emoji, data.ends_at, data.target_count, data.required_tag || null, data.reward_points, id],
+  );
+}
+
+export async function deleteChallenge(id: string) {
+  await getDb().query(`DELETE FROM challenges WHERE id=$1`, [id]);
+}
+
 export type UserChallengeStats = {
   challenges_joined: number;
   challenges_completed: number;

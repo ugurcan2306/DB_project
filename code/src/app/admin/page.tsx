@@ -45,6 +45,12 @@ export default async function AdminPage() {
             <p>Platform insights: trending ingredients, revenue breakdown, and user statistics.</p>
             <span className="admin-nav-arrow">→</span>
           </Link>
+
+          <Link href="/admin/challenges" className="analytics-card admin-nav-card">
+            <h3>Challenge Management</h3>
+            <p>Create, edit, and delete kitchen challenges. Set rewards, tags, and deadlines.</p>
+            <span className="admin-nav-arrow">→</span>
+          </Link>
         </div>
       </main>
     </>

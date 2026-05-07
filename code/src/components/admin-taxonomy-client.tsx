@@ -113,6 +113,28 @@ export function AdminTaxonomyClient() {
     await loadAll();
   }
 
+  async function deleteCategory(id: string, name: string) {
+    const res = await fetch("/api/admin/ingredient-categories", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) { fail("Could not delete category."); return; }
+    notify(`Category "${name}" removed.`);
+    await loadAll();
+  }
+
+  async function deleteIngredient(id: string, name: string) {
+    const res = await fetch("/api/admin/ingredients", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (!res.ok) { fail("Could not delete ingredient."); return; }
+    notify(`Ingredient "${name}" removed.`);
+    await loadAll();
+  }
+
   async function deleteAlias(id: string, name: string) {
     const res = await fetch("/api/admin/ingredient-aliases", {
       method: "DELETE",
@@ -145,12 +167,24 @@ export function AdminTaxonomyClient() {
         </div>
         <div className="supplier-table-wrap">
           <table className="supplier-table">
-            <thead><tr><th>#</th><th>Category Name</th></tr></thead>
+            <thead><tr><th>#</th><th>Category Name</th><th>Actions</th></tr></thead>
             <tbody>
               {categories.map((c, i) => (
-                <tr key={c.id}><td>{i + 1}</td><td>{c.category_name}</td></tr>
+                <tr key={c.id}>
+                  <td>{i + 1}</td>
+                  <td>{c.category_name}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn-secondary supplier-action-btn"
+                      onClick={() => deleteCategory(c.id, c.category_name)}
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
               ))}
-              {!categories.length ? <tr><td colSpan={2}>No categories yet.</td></tr> : null}
+              {!categories.length ? <tr><td colSpan={3}>No categories yet.</td></tr> : null}
             </tbody>
           </table>
         </div>
@@ -189,15 +223,24 @@ export function AdminTaxonomyClient() {
         </div>
         <div className="supplier-table-wrap">
           <table className="supplier-table">
-            <thead><tr><th>Ingredient</th><th>Category</th></tr></thead>
+            <thead><tr><th>Ingredient</th><th>Category</th><th>Actions</th></tr></thead>
             <tbody>
               {ingredients.map((i) => (
                 <tr key={i.id}>
                   <td>{i.ingredient_name}</td>
                   <td>{i.category_name ?? "—"}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn btn-secondary supplier-action-btn"
+                      onClick={() => deleteIngredient(i.id, i.ingredient_name)}
+                    >
+                      Remove
+                    </button>
+                  </td>
                 </tr>
               ))}
-              {!ingredients.length ? <tr><td colSpan={2}>No ingredients yet.</td></tr> : null}
+              {!ingredients.length ? <tr><td colSpan={3}>No ingredients yet.</td></tr> : null}
             </tbody>
           </table>
         </div>
