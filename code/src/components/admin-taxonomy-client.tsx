@@ -34,7 +34,33 @@ export function AdminTaxonomyClient() {
     setAliases(aliasData.aliases ?? []);
   }
 
-  useEffect(() => { void loadAll(); }, []);
+  useEffect(() => {
+    let active = true;
+    const init = async () => {
+      try {
+        const [catRes, ingRes, aliasRes] = await Promise.all([
+          fetch("/api/admin/ingredient-categories"),
+          fetch("/api/admin/ingredients"),
+          fetch("/api/admin/ingredient-aliases"),
+        ]);
+        const catData = (await catRes.json()) as { categories?: Category[] };
+        const ingData = (await ingRes.json()) as { ingredients?: Ingredient[] };
+        const aliasData = (await aliasRes.json()) as { aliases?: Alias[] };
+        if (!active) return;
+        setCategories(catData.categories ?? []);
+        setIngredients(ingData.ingredients ?? []);
+        setAliases(aliasData.aliases ?? []);
+      } catch {
+        if (active) {
+          setError("Failed to load taxonomy data.");
+        }
+      }
+    };
+    void init();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   function notify(msg: string) { setMessage(msg); setError(null); }
   function fail(msg: string) { setError(msg); setMessage(null); }
@@ -103,7 +129,7 @@ export function AdminTaxonomyClient() {
       {/* Categories */}
       <section className="filter-section">
         <h2 className="dashboard-title">Ingredient Categories</h2>
-        <p>Top-level groupings used for ingredient organisation (e.g. "Vegetables", "Dairy").</p>
+        <p>Top-level groupings used for ingredient organisation (e.g. &quot;Vegetables&quot;, &quot;Dairy&quot;).</p>
         <div className="admin-toolbar">
           <div className="supplier-field">
             <label className="supplier-label" htmlFor="catName">Category Name</label>
