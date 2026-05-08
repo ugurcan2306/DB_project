@@ -73,7 +73,6 @@ export function SharedRecipesClient() {
   const [scaledServings, setScaledServings] = useState<Record<string, number>>({});
 
   const [selectedList, setSelectedList] = useState<Record<string, string>>({});
-  const [desiredServings, setDesiredServings] = useState<Record<string, number>>({});
   const [adding, setAdding] = useState<string | null>(null);
   const [addedTo, setAddedTo] = useState<Record<string, string>>({});
   const [buying, setBuying] = useState<string | null>(null);
@@ -151,32 +150,6 @@ export function SharedRecipesClient() {
     }
   }
 
-  async function refetchQuote(recipe: SharedRecipe, ds: number) {
-    const scale = ds / (recipe.servings || 1);
-    const res = await fetch("/api/orders/quote", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        scale,
-        ingredients: recipe.ingredients.map((ing) => ({
-          ingredientId: ing.ingredient_id,
-          aliasId: ing.alias_id,
-          ingredientName: ing.taxonomy_name ?? ing.ingredient_name,
-          quantity: ing.quantity,
-          unit: ing.unit,
-        })),
-      }),
-    });
-    const json = (await res.json()) as RecipeQuote;
-    setQuotes((prev) => ({ ...prev, [recipe.id]: json }));
-  }
-
-  function handleServingsChange(recipe: SharedRecipe, val: string) {
-    const ds = parseInt(val, 10);
-    if (isNaN(ds) || ds < 1) return;
-    setDesiredServings((prev) => ({ ...prev, [recipe.id]: ds }));
-    void refetchQuote(recipe, ds);
-  }
 
   useEffect(() => {
     Promise.all([
@@ -454,15 +427,14 @@ export function SharedRecipesClient() {
                     {/* Price / stock summary always visible */}
                     <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
                       onClick={(e) => e.stopPropagation()}>
-                      {quote ? (
+                      {!quote ? (
+                        <span className="shared-recipe-muted">Calculating price…</span>
+                      ) : quote.canFulfill ? (
                         <span className="shared-recipe-price">
                           Est. ${quote.totalPrice} · {quote.suppliersUsed} supplier{quote.suppliersUsed === 1 ? "" : "s"}
                         </span>
                       ) : (
-                        <span className="shared-recipe-muted">Calculating price…</span>
-                      )}
-                      {quote && !quote.canFulfill && (
-                        <span style={{ fontSize: "0.78rem", color: "#b71c1c", fontWeight: 600 }}>Out of stock</span>
+                        <span style={{ fontSize: "0.78rem", color: "#b71c1c", fontWeight: 600 }}>Not enough stock</span>
                       )}
                       {purchaseInfo[recipe.id] && (
                         <span className="shared-recipe-success">{purchaseInfo[recipe.id]}</span>
