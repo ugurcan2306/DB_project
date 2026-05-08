@@ -77,9 +77,9 @@ export async function getFollowingFeed(viewerId: string) {
        u.full_name AS author_name,
        u.avatar_url AS author_avatar,
        (SELECT ROUND(AVG(cl.rating)::numeric, 2)::float
-          FROM cook_logs cl WHERE cl.recipe_id = r.id) AS avg_rating,
+          FROM cook_logs cl WHERE cl.recipe_id = r.id AND cl.rating IS NOT NULL) AS avg_rating,
        (SELECT COUNT(*)::int
-          FROM cook_logs cl WHERE cl.recipe_id = r.id) AS review_count,
+          FROM cook_logs cl WHERE cl.recipe_id = r.id AND cl.rating IS NOT NULL) AS review_count,
        (SELECT cl.rating FROM cook_logs cl
           WHERE cl.recipe_id = r.id AND cl.user_id = $1) AS my_rating
      FROM recipes r

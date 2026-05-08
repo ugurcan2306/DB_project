@@ -1,4 +1,5 @@
 import { getDb } from "@/db/pool";
+import type { PoolClient } from "pg";
 
 export type ChallengeRow = {
   id: string;
@@ -9,6 +10,9 @@ export type ChallengeRow = {
   ends_at: string;
   target_count: number;
   required_tag: string | null;
+  required_ingredient_id: string | null;
+  required_ingredient_name: string | null;
+  reward_badge_id: string | null;
   reward_points: number;
   badge_name: string | null;
   badge_emoji: string | null;
@@ -31,6 +35,9 @@ const CHALLENGE_BASE_SELECT = `
          c.ends_at,
          c.target_count,
          c.required_tag,
+         c.required_ingredient_id,
+         i.ingredient_name AS required_ingredient_name,
+         c.reward_badge_id,
          c.reward_points,
          b.badge_name,
          b.badge_emoji,
@@ -38,6 +45,7 @@ const CHALLENGE_BASE_SELECT = `
          GREATEST(0, EXTRACT(DAY FROM (c.ends_at - NOW())))::int AS days_left
   FROM challenges c
   LEFT JOIN badges b ON b.id = c.reward_badge_id
+  LEFT JOIN ingredients i ON i.id = c.required_ingredient_id
 `;
 
 export async function listActiveChallenges(): Promise<ChallengeRow[]> {
@@ -52,7 +60,9 @@ export async function listActiveChallenges(): Promise<ChallengeRow[]> {
 export async function listUserChallenges(userId: string): Promise<UserChallengeRow[]> {
   const clean = await getDb().query<UserChallengeRow>(
     `SELECT c.id, c.title, c.description, c.emoji, c.starts_at, c.ends_at,
-            c.target_count, c.required_tag, c.reward_points,
+            c.target_count, c.required_tag,
+            c.required_ingredient_id, i.ingredient_name AS required_ingredient_name,
+            c.reward_badge_id, c.reward_points,
             b.badge_name, b.badge_emoji,
             (SELECT COUNT(*) FROM user_challenge_participation ucp2 WHERE ucp2.challenge_id = c.id)::int AS participants,
             GREATEST(0, EXTRACT(DAY FROM (c.ends_at - NOW())))::int AS days_left,
@@ -60,6 +70,7 @@ export async function listUserChallenges(userId: string): Promise<UserChallengeR
      FROM challenges c
      INNER JOIN user_challenge_participation ucp ON ucp.challenge_id = c.id
      LEFT JOIN badges b ON b.id = c.reward_badge_id
+     LEFT JOIN ingredients i ON i.id = c.required_ingredient_id
      WHERE ucp.user_id = $1
      ORDER BY ucp.completed_at NULLS FIRST, c.ends_at ASC`,
     [userId],
@@ -82,6 +93,89 @@ export async function leaveChallenge(userId: string, challengeId: string) {
      WHERE user_id = $1 AND challenge_id = $2 AND completed_at IS NULL`,
     [userId, challengeId],
   );
+}
+
+/**
+ * Automatically advances challenge progress for every active challenge the user has joined,
+ * given a real recipe they just cooked or purchased. Checks BOTH the challenge's
+ * required_tag (against recipe.dietary_tags) AND its required_ingredient_id
+ * (against recipe_ingredients).
+ *
+ * Returns the list of challenge IDs whose progress was bumped.
+ *
+ * Designed to run inside the checkout transaction — pass the active client.
+ */
+export async function autoLogRecipeForChallenges(
+  client: PoolClient,
+  userId: string,
+  recipeId: string,
+): Promise<string[]> {
+  // Fetch all active challenges the user has joined and not yet completed.
+  const partsRes = await client.query<{
+    participation_id: string;
+    challenge_id: string;
+    required_tag: string | null;
+    required_ingredient_id: string | null;
+  }>(
+    `SELECT ucp.id AS participation_id,
+            c.id AS challenge_id,
+            c.required_tag,
+            c.required_ingredient_id
+     FROM user_challenge_participation ucp
+     JOIN challenges c ON c.id = ucp.challenge_id
+     WHERE ucp.user_id = $1
+       AND ucp.completed_at IS NULL
+       AND c.ends_at > NOW()
+     FOR UPDATE OF ucp`,
+    [userId],
+  );
+
+  if (partsRes.rowCount === 0) return [];
+
+  // Pull the recipe's tags + ingredient IDs once.
+  const recipeRes = await client.query<{
+    dietary_tags: string[];
+    title: string;
+  }>(
+    `SELECT title, dietary_tags FROM recipes WHERE id = $1`,
+    [recipeId],
+  );
+  if (recipeRes.rowCount === 0) return [];
+  const recipeTitle = recipeRes.rows[0].title;
+  const recipeTags = (recipeRes.rows[0].dietary_tags ?? []).map((t) => t.toLowerCase());
+
+  const ingredientsRes = await client.query<{ ingredient_id: string }>(
+    `SELECT ingredient_id FROM recipe_ingredients WHERE recipe_id = $1`,
+    [recipeId],
+  );
+  const recipeIngredientIds = new Set(ingredientsRes.rows.map((r) => r.ingredient_id));
+
+  const bumped: string[] = [];
+
+  for (const row of partsRes.rows) {
+    const tagOk = !row.required_tag || recipeTags.includes(row.required_tag.toLowerCase());
+    const ingOk = !row.required_ingredient_id || recipeIngredientIds.has(row.required_ingredient_id);
+    if (!tagOk || !ingOk) continue;
+
+    // Always log the recipe attempt, even if it qualifies.
+    await client.query(
+      `INSERT INTO challenge_recipe_logs (user_id, challenge_id, recipe_title, tags, ingredients)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [userId, row.challenge_id, recipeTitle, recipeTags.join(","), Array.from(recipeIngredientIds).join(",")],
+    );
+
+    // Bump progress (trg_award_badge_on_completion auto-completes when target hit).
+    await client.query(
+      `UPDATE user_challenge_participation
+       SET progress_count = progress_count + 1
+       WHERE id = $1`,
+      [row.participation_id],
+    );
+
+    bumped.push(row.challenge_id);
+  }
+
+  return bumped;
 }
 
 export async function logChallengeRecipe(
@@ -117,9 +211,10 @@ export async function logChallengeRecipe(
 
     const challengeRes = await client.query<{
       required_tag: string | null;
+      required_ingredient_id: string | null;
       ends_at: string;
     }>(
-      `SELECT required_tag, ends_at FROM challenges WHERE id = $1`,
+      `SELECT required_tag, required_ingredient_id, ends_at FROM challenges WHERE id = $1`,
       [challengeId],
     );
     if (challengeRes.rowCount === 0) throw new Error("Challenge not found.");
@@ -128,8 +223,32 @@ export async function logChallengeRecipe(
     }
 
     const requiredTag = challengeRes.rows[0].required_tag?.toLowerCase().trim() ?? null;
+    const requiredIngredientId = challengeRes.rows[0].required_ingredient_id;
+
     const tagList = tags.toLowerCase().split(",").map((t) => t.trim()).filter(Boolean);
-    const qualifies = !requiredTag || tagList.includes(requiredTag);
+    const tagOk = !requiredTag || tagList.includes(requiredTag);
+
+    let ingredientOk = !requiredIngredientId;
+    if (requiredIngredientId) {
+      // The user typed a free-text ingredient list. Look up which IDs those names map to.
+      const ingNames = ingredients
+        .toLowerCase()
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (ingNames.length > 0) {
+        const matchRes = await client.query<{ id: string }>(
+          `SELECT id FROM ingredients WHERE LOWER(ingredient_name) = ANY($1::text[])
+           UNION
+           SELECT canonical_ingredient_id AS id FROM ingredient_aliases
+             WHERE LOWER(alias_name) = ANY($1::text[])`,
+          [ingNames],
+        );
+        ingredientOk = matchRes.rows.some((r) => r.id === requiredIngredientId);
+      }
+    }
+
+    const qualifies = tagOk && ingredientOk;
 
     await client.query(
       `INSERT INTO challenge_recipe_logs (user_id, challenge_id, recipe_title, tags, ingredients)
@@ -246,40 +365,84 @@ export async function listAllChallenges(): Promise<ChallengeRow[]> {
   return result.rows;
 }
 
-export async function createChallenge(data: {
+type ChallengeWriteInput = {
   title: string;
   description: string;
   emoji: string;
+  starts_at?: string | null;
   ends_at: string;
   target_count: number;
   required_tag: string | null;
+  required_ingredient_id: string | null;
+  reward_badge_id: string | null;
   reward_points: number;
-}) {
+};
+
+export async function createChallenge(data: ChallengeWriteInput) {
   await getDb().query(
-    `INSERT INTO challenges (title, description, emoji, ends_at, target_count, required_tag, reward_points)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-    [data.title, data.description, data.emoji, data.ends_at, data.target_count, data.required_tag || null, data.reward_points],
+    `INSERT INTO challenges
+       (title, description, emoji, starts_at, ends_at, target_count,
+        required_tag, required_ingredient_id, reward_badge_id, reward_points)
+     VALUES ($1, $2, $3, COALESCE($4::timestamptz, NOW()), $5, $6, $7, $8, $9, $10)`,
+    [
+      data.title,
+      data.description,
+      data.emoji,
+      data.starts_at ?? null,
+      data.ends_at,
+      data.target_count,
+      data.required_tag || null,
+      data.required_ingredient_id || null,
+      data.reward_badge_id || null,
+      data.reward_points,
+    ],
   );
 }
 
-export async function updateChallenge(
-  id: string,
-  data: {
-    title: string;
-    description: string;
-    emoji: string;
-    ends_at: string;
-    target_count: number;
-    required_tag: string | null;
-    reward_points: number;
-  },
-) {
+export async function updateChallenge(id: string, data: ChallengeWriteInput) {
   await getDb().query(
     `UPDATE challenges
-     SET title=$1, description=$2, emoji=$3, ends_at=$4, target_count=$5, required_tag=$6, reward_points=$7
-     WHERE id=$8`,
-    [data.title, data.description, data.emoji, data.ends_at, data.target_count, data.required_tag || null, data.reward_points, id],
+     SET title = $1,
+         description = $2,
+         emoji = $3,
+         starts_at = COALESCE($4::timestamptz, starts_at),
+         ends_at = $5,
+         target_count = $6,
+         required_tag = $7,
+         required_ingredient_id = $8,
+         reward_badge_id = $9,
+         reward_points = $10
+     WHERE id = $11`,
+    [
+      data.title,
+      data.description,
+      data.emoji,
+      data.starts_at ?? null,
+      data.ends_at,
+      data.target_count,
+      data.required_tag || null,
+      data.required_ingredient_id || null,
+      data.reward_badge_id || null,
+      data.reward_points,
+      id,
+    ],
   );
+}
+
+export type BadgeRow = {
+  id: string;
+  badge_name: string;
+  badge_emoji: string;
+  description: string | null;
+};
+
+export async function listAllBadges(): Promise<BadgeRow[]> {
+  const result = await getDb().query<BadgeRow>(
+    `SELECT id, badge_name, badge_emoji, description
+     FROM badges
+     ORDER BY badge_name ASC`,
+  );
+  return result.rows;
 }
 
 export async function deleteChallenge(id: string) {

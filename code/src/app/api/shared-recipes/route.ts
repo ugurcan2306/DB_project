@@ -21,13 +21,6 @@ export async function GET() {
      WHERE r.is_published = TRUE
        AND r.is_deleted = FALSE
        AND u.role = 'verified_chef'
-       AND r.author_id != $1
-       AND r.id NOT IN (
-         SELECT mlr.recipe_id
-         FROM meal_list_recipes mlr
-         JOIN meal_lists ml ON ml.id = mlr.list_id
-         WHERE ml.user_id = $1
-       )
      ORDER BY r.created_at DESC`,
     [session.user.id],
   );
@@ -46,6 +39,7 @@ export async function GET() {
   const ingredientsResult = await db.query<{
     recipe_id: string;
     ingredient_id: string;
+    alias_id: string | null;
     ingredient_name: string;
     taxonomy_name: string;
     quantity: number;
@@ -53,6 +47,7 @@ export async function GET() {
   }>(
     `SELECT ri.recipe_id,
             ri.ingredient_id,
+            ri.alias_id,
             i.ingredient_name,
             COALESCE(ia.alias_name, i.ingredient_name) AS taxonomy_name,
             ri.quantity,
@@ -72,12 +67,13 @@ export async function GET() {
 
   const ingredientsByRecipe: Record<
     string,
-    { ingredient_id: string; ingredient_name: string; taxonomy_name: string; quantity: number; unit: string }[]
+    { ingredient_id: string; alias_id: string | null; ingredient_name: string; taxonomy_name: string; quantity: number; unit: string }[]
   > = {};
   for (const i of ingredientsResult.rows) {
     if (!ingredientsByRecipe[i.recipe_id]) ingredientsByRecipe[i.recipe_id] = [];
     ingredientsByRecipe[i.recipe_id].push({
       ingredient_id: i.ingredient_id,
+      alias_id: i.alias_id,
       ingredient_name: i.ingredient_name,
       taxonomy_name: i.taxonomy_name,
       quantity: i.quantity,

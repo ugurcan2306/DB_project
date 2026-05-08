@@ -10,7 +10,18 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json();
-  const { title, description, emoji, ends_at, target_count, required_tag, reward_points } = body;
+  const {
+    title,
+    description,
+    emoji,
+    starts_at,
+    ends_at,
+    target_count,
+    required_tag,
+    required_ingredient_id,
+    reward_badge_id,
+    reward_points,
+  } = body;
 
   if (!title || !description || !ends_at || !target_count) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -20,9 +31,12 @@ export async function POST(req: Request) {
     title,
     description,
     emoji: emoji || "🏆",
+    starts_at: starts_at || null,
     ends_at,
     target_count: Number(target_count),
     required_tag: required_tag || null,
+    required_ingredient_id: required_ingredient_id || null,
+    reward_badge_id: reward_badge_id || null,
     reward_points: Number(reward_points) || 100,
   });
 

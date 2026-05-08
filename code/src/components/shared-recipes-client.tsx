@@ -16,7 +16,7 @@ type SharedRecipe = {
   is_following_author: boolean;
   created_at: string;
   steps: { step_number: number; instruction: string }[];
-  ingredients: { ingredient_id: string; ingredient_name: string; taxonomy_name: string; quantity: number; unit: string }[];
+  ingredients: { ingredient_id: string; alias_id: string | null; ingredient_name: string; taxonomy_name: string; quantity: number; unit: string }[];
 };
 
 type MealList = {
@@ -105,9 +105,11 @@ export function SharedRecipesClient() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
+              scale: 1,
               ingredients: recipe.ingredients.map((ing) => ({
                 ingredientId: ing.ingredient_id,
-                ingredientName: ing.ingredient_name,
+                aliasId: ing.alias_id,
+                ingredientName: ing.taxonomy_name ?? ing.ingredient_name,
                 quantity: ing.quantity,
                 unit: ing.unit,
               })),
@@ -161,6 +163,7 @@ export function SharedRecipesClient() {
         body: JSON.stringify({
           recipeId: recipe.id,
           recipeTitle: recipe.title,
+          scale: 1,
           ingredients: recipe.ingredients.map((ing) => ({
             ingredientId: ing.ingredient_id,
             ingredientName: ing.ingredient_name,
