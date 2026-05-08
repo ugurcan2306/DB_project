@@ -167,6 +167,7 @@ export function SharedRecipesClient() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Initial quote fetch (base quantities) for all recipes
   useEffect(() => {
     if (!recipes.length) return;
     let active = true;
@@ -197,6 +198,34 @@ export function SharedRecipesClient() {
     void loadQuotes();
     return () => { active = false; };
   }, [recipes]);
+
+  // Re-fetch quote when serving scale changes for the expanded recipe
+  useEffect(() => {
+    if (!expandedRecipeId) return;
+    const recipe = recipes.find((r) => r.id === expandedRecipeId);
+    if (!recipe) return;
+    const currentServings = scaledServings[expandedRecipeId] ?? recipe.servings;
+    const scale = currentServings / recipe.servings;
+
+    const timer = setTimeout(async () => {
+      const res = await fetch("/api/orders/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ingredients: recipe.ingredients.map((ing) => ({
+            ingredientId: ing.ingredient_id,
+            ingredientName: ing.ingredient_name,
+            quantity: parseFloat((ing.quantity * scale).toFixed(3)),
+            unit: ing.unit,
+          })),
+        }),
+      });
+      const json = (await res.json()) as RecipeQuote;
+      setQuotes((prev) => ({ ...prev, [expandedRecipeId]: json }));
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [scaledServings, expandedRecipeId, recipes]);
 
   async function handleAddToList(recipeId: string) {
     const listId = selectedList[recipeId];
