@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { getDb } from "@/db/pool";
 import { logSupplierAction } from "@/lib/supplier-history";
 import { autoLogRecipeForChallenges } from "@/lib/challenges";
+import { convertQuantity } from "@/lib/units";
 import { randomUUID } from "node:crypto";
 
 type IngredientInput = {
@@ -106,26 +107,33 @@ export async function POST(request: Request) {
       let remaining = needed;
       let availableTotal = 0;
       for (const row of exactRes.rows) {
-        const available = Number(row.current_stock);
-        availableTotal += available;
-        if (remaining <= 0) break;
-        const take = Math.min(remaining, available);
-        if (take <= 0) continue;
+        const availableInSupplierUnit = Number(row.current_stock);
+        const supplierUnit = row.unit || ingredient.unit;
+        const availableInRecipeUnit = convertQuantity(availableInSupplierUnit, supplierUnit, ingredient.unit);
+
+        availableTotal += availableInRecipeUnit;
+        if (remaining <= 1e-6) break;
+        
+        const takeInRecipeUnit = Math.min(remaining, availableInRecipeUnit);
+        if (takeInRecipeUnit <= 1e-6) continue;
+
+        const takeInSupplierUnit = convertQuantity(takeInRecipeUnit, ingredient.unit, supplierUnit);
         const unitPrice = Number(row.unit_price);
-        const lineTotal = unitPrice * take;
+        const lineTotal = unitPrice * takeInSupplierUnit;
+        
         allocations.push({
           supplierId: row.supplier_id,
           inventoryItemId: row.inventory_item_id,
           ingredientId: row.ingredient_id,
           ingredientName: row.display_name,
           requestedIngredientName: ingredient.ingredientName,
-          quantity: take,
-          unit: row.unit || ingredient.unit,
+          quantity: takeInSupplierUnit,
+          unit: supplierUnit,
           unitPrice,
           lineTotal,
         });
         totalPrice += lineTotal;
-        remaining -= take;
+        remaining -= takeInRecipeUnit;
       }
 
       // Phase 2 — substitute: same canonical ingredient, DIFFERENT alias_id.
@@ -155,26 +163,33 @@ export async function POST(request: Request) {
 
         const usedAltNames = new Set<string>();
         for (const row of substRes.rows) {
-          const available = Number(row.current_stock);
-          availableTotal += available;
-          if (remaining <= 0) break;
-          const take = Math.min(remaining, available);
-          if (take <= 0) continue;
+          const availableInSupplierUnit = Number(row.current_stock);
+          const supplierUnit = row.unit || ingredient.unit;
+          const availableInRecipeUnit = convertQuantity(availableInSupplierUnit, supplierUnit, ingredient.unit);
+
+          availableTotal += availableInRecipeUnit;
+          if (remaining <= 1e-6) break;
+          
+          const takeInRecipeUnit = Math.min(remaining, availableInRecipeUnit);
+          if (takeInRecipeUnit <= 1e-6) continue;
+
+          const takeInSupplierUnit = convertQuantity(takeInRecipeUnit, ingredient.unit, supplierUnit);
           const unitPrice = Number(row.unit_price);
-          const lineTotal = unitPrice * take;
+          const lineTotal = unitPrice * takeInSupplierUnit;
+          
           allocations.push({
             supplierId: row.supplier_id,
             inventoryItemId: row.inventory_item_id,
             ingredientId: row.ingredient_id,
             ingredientName: row.display_name,
             requestedIngredientName: ingredient.ingredientName,
-            quantity: take,
-            unit: row.unit || ingredient.unit,
+            quantity: takeInSupplierUnit,
+            unit: supplierUnit,
             unitPrice,
             lineTotal,
           });
           totalPrice += lineTotal;
-          remaining -= take;
+          remaining -= takeInRecipeUnit;
           usedAltNames.add(row.display_name);
         }
 
@@ -186,7 +201,7 @@ export async function POST(request: Request) {
         }
       }
 
-      if (remaining > 0) {
+      if (remaining > 1e-6) {
         shortages.push({
           ingredientName: ingredient.ingredientName,
           required: needed,

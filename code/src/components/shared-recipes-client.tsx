@@ -47,6 +47,7 @@ export function SharedRecipesClient() {
 
   // per-recipe selected list id
   const [selectedList, setSelectedList] = useState<Record<string, string>>({});
+  const [desiredServings, setDesiredServings] = useState<Record<string, number>>({});
   const [adding, setAdding] = useState<string | null>(null);
   const [addedTo, setAddedTo] = useState<Record<string, string>>({});  // recipeId → list name
   const [buying, setBuying] = useState<string | null>(null);
@@ -75,6 +76,33 @@ export function SharedRecipesClient() {
     } finally {
       setFollowBusy(null);
     }
+  }
+
+  async function refetchQuote(recipe: SharedRecipe, ds: number) {
+    const scale = ds / (recipe.servings || 1);
+    const res = await fetch("/api/orders/quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scale,
+        ingredients: recipe.ingredients.map((ing) => ({
+          ingredientId: ing.ingredient_id,
+          aliasId: ing.alias_id,
+          ingredientName: ing.taxonomy_name ?? ing.ingredient_name,
+          quantity: ing.quantity,
+          unit: ing.unit,
+        })),
+      }),
+    });
+    const json = (await res.json()) as RecipeQuote;
+    setQuotes((prev) => ({ ...prev, [recipe.id]: json }));
+  }
+
+  function handleServingsChange(recipe: SharedRecipe, val: string) {
+    const ds = parseInt(val, 10);
+    if (isNaN(ds) || ds < 1) return;
+    setDesiredServings((prev) => ({ ...prev, [recipe.id]: ds }));
+    void refetchQuote(recipe, ds);
   }
 
   useEffect(() => {
@@ -155,6 +183,8 @@ export function SharedRecipesClient() {
   }
 
   async function handleShopThisMeal(recipe: SharedRecipe) {
+    const ds = desiredServings[recipe.id] ?? recipe.servings;
+    const scale = ds / (recipe.servings || 1);
     setBuying(recipe.id);
     try {
       const res = await fetch("/api/orders/recipe", {
@@ -163,7 +193,7 @@ export function SharedRecipesClient() {
         body: JSON.stringify({
           recipeId: recipe.id,
           recipeTitle: recipe.title,
-          scale: 1,
+          scale,
           ingredients: recipe.ingredients.map((ing) => ({
             ingredientId: ing.ingredient_id,
             ingredientName: ing.ingredient_name,
@@ -285,7 +315,21 @@ export function SharedRecipesClient() {
                 )}
               </div>
 
-              <div className="shared-recipe-actions">
+              <div className="shared-recipe-actions" style={{ display: "flex", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <label htmlFor={`servings-${recipe.id}`} style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                    Servings:
+                  </label>
+                  <input
+                    id={`servings-${recipe.id}`}
+                    type="number"
+                    min="1"
+                    className="form-input"
+                    style={{ width: "60px", padding: "4px" }}
+                    value={desiredServings[recipe.id] ?? recipe.servings}
+                    onChange={(e) => handleServingsChange(recipe, e.target.value)}
+                  />
+                </div>
                 <button
                   type="button"
                   className="btn btn-primary shared-buy-btn"

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/db/pool";
+import { convertQuantity } from "@/lib/units";
 
 type IngredientInput = {
   ingredientId: string;
@@ -18,6 +19,7 @@ type SupplierStock = {
   display_name: string; // alias name if alias_id else canonical name
   unit_price: string;
   current_stock: string;
+  unit: string;
 };
 
 export async function POST(request: Request) {
@@ -56,7 +58,8 @@ export async function POST(request: Request) {
               sii.alias_id,
               COALESCE(ia.alias_name, i.ingredient_name) AS display_name,
               sii.unit_price,
-              sii.current_stock
+              sii.current_stock,
+              sii.unit
        FROM supplier_inventory_items sii
        JOIN ingredients i ON i.id = sii.ingredient_id
        LEFT JOIN ingredient_aliases ia ON ia.id = sii.alias_id
@@ -71,14 +74,21 @@ export async function POST(request: Request) {
     let remaining = required;
     let availableTotal = 0;
     for (const row of exactRes.rows) {
-      const available = Number(row.current_stock);
-      availableTotal += available;
-      if (remaining <= 0) break;
-      const take = Math.min(remaining, available);
-      if (take <= 0) continue;
-      totalPrice += take * Number(row.unit_price);
+      const availableInSupplierUnit = Number(row.current_stock);
+      const supplierUnit = row.unit || ingredient.unit;
+      const availableInRecipeUnit = convertQuantity(availableInSupplierUnit, supplierUnit, ingredient.unit);
+
+      availableTotal += availableInRecipeUnit;
+      if (remaining <= 1e-6) break;
+      
+      const takeInRecipeUnit = Math.min(remaining, availableInRecipeUnit);
+      if (takeInRecipeUnit <= 1e-6) continue;
+
+      const takeInSupplierUnit = convertQuantity(takeInRecipeUnit, ingredient.unit, supplierUnit);
+      
+      totalPrice += takeInSupplierUnit * Number(row.unit_price);
       suppliersUsed.add(row.supplier_id);
-      remaining -= take;
+      remaining -= takeInRecipeUnit;
     }
 
     // Phase 2 — substitute: same ingredient_id, DIFFERENT alias_id.
@@ -91,7 +101,8 @@ export async function POST(request: Request) {
                 sii.alias_id,
                 COALESCE(ia.alias_name, i.ingredient_name) AS display_name,
                 sii.unit_price,
-                sii.current_stock
+                sii.current_stock,
+                sii.unit
          FROM supplier_inventory_items sii
          JOIN ingredients i ON i.id = sii.ingredient_id
          LEFT JOIN ingredient_aliases ia ON ia.id = sii.alias_id
@@ -105,14 +116,21 @@ export async function POST(request: Request) {
 
       const usedAltNames = new Set<string>();
       for (const row of substRes.rows) {
-        const available = Number(row.current_stock);
-        availableTotal += available;
-        if (remaining <= 0) break;
-        const take = Math.min(remaining, available);
-        if (take <= 0) continue;
-        totalPrice += take * Number(row.unit_price);
+        const availableInSupplierUnit = Number(row.current_stock);
+        const supplierUnit = row.unit || ingredient.unit;
+        const availableInRecipeUnit = convertQuantity(availableInSupplierUnit, supplierUnit, ingredient.unit);
+
+        availableTotal += availableInRecipeUnit;
+        if (remaining <= 1e-6) break;
+        
+        const takeInRecipeUnit = Math.min(remaining, availableInRecipeUnit);
+        if (takeInRecipeUnit <= 1e-6) continue;
+
+        const takeInSupplierUnit = convertQuantity(takeInRecipeUnit, ingredient.unit, supplierUnit);
+        
+        totalPrice += takeInSupplierUnit * Number(row.unit_price);
         suppliersUsed.add(row.supplier_id);
-        remaining -= take;
+        remaining -= takeInRecipeUnit;
         usedAltNames.add(row.display_name);
       }
 
@@ -124,7 +142,7 @@ export async function POST(request: Request) {
       }
     }
 
-    if (remaining > 0) {
+    if (remaining > 1e-6) {
       shortages.push({
         ingredientName: ingredient.ingredientName,
         required,
