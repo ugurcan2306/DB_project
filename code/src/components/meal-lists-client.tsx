@@ -54,18 +54,24 @@ type RecipeInList = {
   ingredients: { ingredient_name: string; quantity: number; unit: string }[];
 };
 
+function difficultyBadgeClass(d: string) {
+  if (d === "easy") return "my-diff-badge my-diff-easy";
+  if (d === "hard") return "my-diff-badge my-diff-hard";
+  return "my-diff-badge my-diff-medium";
+}
+
 export function MealListsClient() {
   const [lists, setLists] = useState<MealList[]>([]);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedListId, setExpandedListId] = useState<string | null>(null);
+  const [expandedRecipeId, setExpandedRecipeId] = useState<string | null>(null);
   const [listRecipes, setListRecipes] = useState<Record<string, RecipeInList[]>>({});
+  const [scaledServings, setScaledServings] = useState<Record<string, number>>({});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [creating, setCreating] = useState(false);
-
   const [deletingList, setDeletingList] = useState<string | null>(null);
   const [deletingRecipe, setDeletingRecipe] = useState<string | null>(null);
   const [awaitingRating, setAwaitingRating] = useState<Record<string, boolean>>({});
@@ -80,7 +86,7 @@ export function MealListsClient() {
   const [filterMinRating, setFilterMinRating] = useState(0);
 
   const filteredListRecipes = useMemo(() => {
-    const base = expandedId ? (listRecipes[expandedId] ?? []) : [];
+    const base = expandedListId ? (listRecipes[expandedListId] ?? []) : [];
     return base.filter((r) => {
       if (filterTags.length > 0 && !filterTags.every((t) => r.dietary_tags.includes(t))) return false;
       if (filterDifficulty.length > 0 && !filterDifficulty.includes(r.difficulty)) return false;
@@ -94,7 +100,7 @@ export function MealListsClient() {
       }
       return true;
     });
-  }, [listRecipes, expandedId, filterTags, filterDifficulty, filterMaxTime, filterIngredient, filterMinRating]);
+  }, [listRecipes, expandedListId, filterTags, filterDifficulty, filterMaxTime, filterIngredient, filterMinRating]);
 
   function toggleTag(val: string) {
     setFilterTags((prev) => prev.includes(val) ? prev.filter((t) => t !== val) : [...prev, val]);
@@ -129,12 +135,24 @@ export function MealListsClient() {
     setListRecipes((prev) => ({ ...prev, [listId]: data.recipes ?? [] }));
   }
 
-  function toggleExpand(listId: string) {
-    if (expandedId === listId) {
-      setExpandedId(null);
+  function toggleList(listId: string) {
+    if (expandedListId === listId) {
+      setExpandedListId(null);
+      setExpandedRecipeId(null);
     } else {
-      setExpandedId(listId);
+      setExpandedListId(listId);
+      setExpandedRecipeId(null);
+      clearFilters();
       loadListRecipes(listId);
+    }
+  }
+
+  function toggleRecipe(recipeId: string, baseServings: number) {
+    if (expandedRecipeId === recipeId) {
+      setExpandedRecipeId(null);
+    } else {
+      setExpandedRecipeId(recipeId);
+      setScaledServings((prev) => ({ ...prev, [recipeId]: prev[recipeId] ?? baseServings }));
     }
   }
 
@@ -164,7 +182,7 @@ export function MealListsClient() {
     try {
       await fetch(`/api/meal-lists/${listId}`, { method: "DELETE" });
       setLists((prev) => prev.filter((l) => l.id !== listId));
-      if (expandedId === listId) setExpandedId(null);
+      if (expandedListId === listId) { setExpandedListId(null); setExpandedRecipeId(null); }
     } finally {
       setDeletingList(null);
     }
@@ -199,6 +217,7 @@ export function MealListsClient() {
       await fetch(`/api/meal-lists/${listId}/recipes/${recipeId}`, { method: "DELETE" });
       setListRecipes((prev) => ({ ...prev, [listId]: (prev[listId] ?? []).filter((r) => r.id !== recipeId) }));
       setLists((prev) => prev.map((l) => l.id === listId ? { ...l, recipe_count: Math.max(0, l.recipe_count - 1) } : l));
+      if (expandedRecipeId === recipeId) setExpandedRecipeId(null);
     } finally {
       setDeletingRecipe(null);
     }
@@ -215,24 +234,13 @@ export function MealListsClient() {
         <form onSubmit={handleCreate}>
           <div className="form-group auth-field" style={{ marginBottom: "0.75rem" }}>
             <label htmlFor="list-name">List Name *</label>
-            <input
-              id="list-name"
-              type="text"
-              placeholder="e.g. Weeknight Dinners"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              maxLength={255}
-            />
+            <input id="list-name" type="text" placeholder="e.g. Weeknight Dinners"
+              value={newName} onChange={(e) => setNewName(e.target.value)} maxLength={255} />
           </div>
           <div className="form-group auth-field" style={{ marginBottom: "0.75rem" }}>
             <label htmlFor="list-desc">Description</label>
-            <input
-              id="list-desc"
-              type="text"
-              placeholder="Optional description"
-              value={newDesc}
-              onChange={(e) => setNewDesc(e.target.value)}
-            />
+            <input id="list-desc" type="text" placeholder="Optional description"
+              value={newDesc} onChange={(e) => setNewDesc(e.target.value)} />
           </div>
           <button type="submit" className="btn btn-primary" disabled={creating || !newName.trim()}>
             {creating ? "Creating…" : "+ Create List"}
@@ -240,21 +248,19 @@ export function MealListsClient() {
         </form>
       </div>
 
-      {/* Hint to browse shared recipes */}
       <div style={{ marginBottom: "1.5rem", fontSize: "0.9rem" }}>
         Browse <Link href="/shared-recipes">Shared Recipes</Link> to add recipes to your lists.
       </div>
 
-      {/* Lists */}
       {lists.length === 0 ? (
-        <div className="filter-section">
-          <p>No meal lists yet. Create one above.</p>
-        </div>
+        <div className="filter-section"><p>No meal lists yet. Create one above.</p></div>
       ) : (
         lists.map((list) => (
           <div key={list.id} className="filter-section" style={{ marginBottom: "1rem" }}>
+
+            {/* List header */}
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div>
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <h2 style={{ margin: "0 0 0.25rem 0" }}>{list.name}</h2>
                 {list.description && (
                   <p style={{ margin: "0 0 0.25rem 0", color: "#666", fontSize: "0.9rem" }}>{list.description}</p>
@@ -263,22 +269,20 @@ export function MealListsClient() {
                   {list.recipe_count} recipe{list.recipe_count !== 1 ? "s" : ""} · Created {new Date(list.created_at).toLocaleDateString()}
                 </p>
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" className="btn btn-secondary" onClick={() => toggleExpand(list.id)}>
-                  {expandedId === list.id ? "Collapse" : "View Recipes"}
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <button type="button" className="btn btn-secondary" onClick={() => toggleList(list.id)}>
+                  {expandedListId === list.id ? "Collapse" : "View Recipes"}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
+                <button type="button" className="btn btn-secondary"
                   onClick={() => handleDeleteList(list.id, list.name)}
-                  disabled={deletingList === list.id}
-                >
+                  disabled={deletingList === list.id}>
                   {deletingList === list.id ? "Deleting…" : "Delete"}
                 </button>
               </div>
             </div>
 
-            {expandedId === list.id && (
+            {/* Expanded list body */}
+            {expandedListId === list.id && (
               <div style={{ marginTop: "1rem", borderTop: "1px solid #eee", paddingTop: "1rem" }}>
                 {!listRecipes[list.id] ? (
                   <p style={{ fontSize: "0.9rem", color: "#999" }}>Loading…</p>
@@ -295,14 +299,9 @@ export function MealListsClient() {
                           <span className="filter-label">Dietary Tags</span>
                           <div className="chip-group">
                             {DIETARY_TAGS.map((tag) => (
-                              <button
-                                key={tag.value}
-                                type="button"
+                              <button key={tag.value} type="button"
                                 className={`chip${filterTags.includes(tag.value) ? " active" : ""}`}
-                                onClick={() => toggleTag(tag.value)}
-                              >
-                                {tag.label}
-                              </button>
+                                onClick={() => toggleTag(tag.value)}>{tag.label}</button>
                             ))}
                           </div>
                         </div>
@@ -310,14 +309,9 @@ export function MealListsClient() {
                           <span className="filter-label">Difficulty</span>
                           <div className="chip-group">
                             {DIFFICULTIES.map((d) => (
-                              <button
-                                key={d}
-                                type="button"
+                              <button key={d} type="button"
                                 className={`chip${filterDifficulty.includes(d) ? " active" : ""}`}
-                                onClick={() => toggleDifficulty(d)}
-                              >
-                                {d.charAt(0).toUpperCase() + d.slice(1)}
-                              </button>
+                                onClick={() => toggleDifficulty(d)}>{d.charAt(0).toUpperCase() + d.slice(1)}</button>
                             ))}
                           </div>
                         </div>
@@ -325,14 +319,9 @@ export function MealListsClient() {
                           <span className="filter-label">Max Cook Time</span>
                           <div className="chip-group">
                             {TIME_OPTIONS.map((opt) => (
-                              <button
-                                key={opt.value}
-                                type="button"
+                              <button key={opt.value} type="button"
                                 className={`chip${filterMaxTime === opt.value ? " active" : ""}`}
-                                onClick={() => setFilterMaxTime(opt.value)}
-                              >
-                                {opt.label}
-                              </button>
+                                onClick={() => setFilterMaxTime(opt.value)}>{opt.label}</button>
                             ))}
                           </div>
                         </div>
@@ -340,14 +329,9 @@ export function MealListsClient() {
                           <span className="filter-label">Min Chef Rating</span>
                           <div className="chip-group">
                             {RATING_OPTIONS.map((opt) => (
-                              <button
-                                key={opt.value}
-                                type="button"
+                              <button key={opt.value} type="button"
                                 className={`chip${filterMinRating === opt.value ? " active" : ""}`}
-                                onClick={() => setFilterMinRating(opt.value)}
-                              >
-                                {opt.label}
-                              </button>
+                                onClick={() => setFilterMinRating(opt.value)}>{opt.label}</button>
                             ))}
                           </div>
                         </div>
@@ -355,22 +339,13 @@ export function MealListsClient() {
                           <span className="filter-label">Ingredient</span>
                           <div className="filter-ingredient-row">
                             <span className="filter-ingredient-icon">🔍</span>
-                            <input
-                              type="text"
-                              placeholder="Search by ingredient…"
+                            <input type="text" placeholder="Search by ingredient…"
                               value={filterIngredient}
                               onChange={(e) => setFilterIngredient(e.target.value)}
-                              className="filter-ingredient-input"
-                            />
+                              className="filter-ingredient-input" />
                             {filterIngredient && (
-                              <button
-                                type="button"
-                                className="filter-ingredient-clear"
-                                onClick={() => setFilterIngredient("")}
-                                aria-label="Clear ingredient filter"
-                              >
-                                ×
-                              </button>
+                              <button type="button" className="filter-ingredient-clear"
+                                onClick={() => setFilterIngredient("")} aria-label="Clear">×</button>
                             )}
                           </div>
                         </div>
@@ -387,111 +362,153 @@ export function MealListsClient() {
                       </div>
                     </div>
 
-                    {filteredListRecipes.length === 0 ? (
+                    {filteredListRecipes.length === 0 && (
                       <p style={{ fontSize: "0.9rem", color: "#999" }}>No recipes match the selected filters.</p>
-                    ) : null}
+                    )}
 
-                    {filteredListRecipes.map((recipe) => (
-                      <div key={recipe.id} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "0.85rem", marginBottom: "0.75rem" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                          <div style={{ flex: 1 }}>
-                            <h3 style={{ margin: "0 0 0.2rem 0" }}>{recipe.title}</h3>
-                            <p style={{ margin: "0 0 0.35rem 0", fontSize: "0.82rem", color: "#888" }}>by {recipe.author_name}</p>
-                            {recipe.description && (
-                              <p style={{ margin: "0 0 0.35rem 0", fontSize: "0.9rem", color: "#555" }}>{recipe.description}</p>
-                            )}
-                            <p style={{ margin: "0 0 0.35rem 0", fontSize: "0.85rem" }}>
-                              <strong>Difficulty:</strong> {recipe.difficulty} &nbsp;|&nbsp;
-                              <strong>Time:</strong> {recipe.cooking_time_minutes} min &nbsp;|&nbsp;
-                              <strong>Servings:</strong> {recipe.servings}
-                            </p>
-                            {recipe.dietary_tags?.length > 0 && (
-                              <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.82rem" }}>
-                                <strong>Tags:</strong> {recipe.dietary_tags.join(", ")}
-                              </p>
-                            )}
+                    {filteredListRecipes.map((recipe) => {
+                      const isRecipeExpanded = expandedRecipeId === recipe.id;
+                      const currentServings = scaledServings[recipe.id] ?? recipe.servings;
+                      const scale = currentServings / recipe.servings;
 
-                            {recipe.ingredients?.length > 0 && (
-                              <div style={{ marginBottom: "0.5rem" }}>
-                                <strong style={{ fontSize: "0.85rem" }}>Ingredients</strong>
-                                <ul style={{ margin: "0.25rem 0 0 1.1rem", padding: 0 }}>
-                                  {recipe.ingredients.map((ing) => (
-                                    <li key={ing.ingredient_name} style={{ fontSize: "0.85rem", marginBottom: "0.15rem" }}>
-                                      {ing.quantity} {ing.unit} — {ing.ingredient_name}
-                                    </li>
-                                  ))}
-                                </ul>
+                      return (
+                        <div key={recipe.id} className="filter-section my-recipe-card" style={{ marginBottom: "0.75rem" }}>
+
+                          {/* ── Summary row ─────────────────────────── */}
+                          <div className="my-recipe-summary" onClick={() => toggleRecipe(recipe.id, recipe.servings)}>
+                            <div className="my-recipe-summary-main">
+                              <div className="my-recipe-heading">
+                                <h3 className="my-recipe-title" style={{ fontSize: "1.05rem" }}>{recipe.title}</h3>
+                                <div className="my-recipe-badges">
+                                  <span className={difficultyBadgeClass(recipe.difficulty)}>{recipe.difficulty}</span>
+                                </div>
                               </div>
-                            )}
-
-                            {recipe.steps?.length > 0 && (
-                              <div>
-                                <strong style={{ fontSize: "0.85rem" }}>Instructions</strong>
-                                <ol style={{ margin: "0.25rem 0 0 1.1rem", padding: 0 }}>
-                                  {recipe.steps.map((step) => (
-                                    <li key={step.step_number} style={{ fontSize: "0.85rem", marginBottom: "0.2rem" }}>
-                                      {step.instruction}
-                                    </li>
-                                  ))}
-                                </ol>
-                              </div>
-                            )}
-                          </div>
-
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, marginLeft: 12 }}>
-                            {recipe.cover_image_url && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={recipe.cover_image_url} alt={recipe.title} style={{ width: 90, height: 70, objectFit: "cover", borderRadius: 4 }} />
-                            )}
-                            {recipe.user_rating ? (
-                              <p style={{ margin: 0, fontSize: "0.85rem", color: "#065f46" }}>
-                                Cooked — rated {recipe.user_rating}/5
+                              <p style={{ margin: "2px 0 4px", fontSize: "0.82rem", color: "#888" }}>
+                                By {recipe.author_name}
+                                {recipe.author_avg_rating != null && (
+                                  <span className="shared-chef-rating" style={{ marginLeft: 8 }}>★ {recipe.author_avg_rating}</span>
+                                )}
                               </p>
-                            ) : awaitingRating[recipe.id] ? (
-                              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                                <select
-                                  className="supplier-select"
-                                  value={pendingRating[recipe.id] ?? ""}
-                                  onChange={(e) => setPendingRating((prev) => ({ ...prev, [recipe.id]: Number(e.target.value) }))}
-                                  style={{ width: 70 }}
-                                >
-                                  <option value="">★</option>
-                                  {[1, 2, 3, 4, 5].map((n) => (
-                                    <option key={n} value={n}>{n}</option>
+                              <div className="my-recipe-meta">
+                                <span className="shared-meta-chip">{recipe.cooking_time_minutes} min</span>
+                                <span className="shared-meta-chip">{recipe.servings} servings</span>
+                              </div>
+                              {recipe.dietary_tags?.length > 0 && (
+                                <div className="shared-recipe-tags" style={{ marginTop: 6 }}>
+                                  {recipe.dietary_tags.map((tag) => (
+                                    <span key={tag} className="tag">{tag}</span>
                                   ))}
-                                </select>
-                                <button
-                                  type="button"
-                                  className="btn btn-primary"
-                                  onClick={() => handleCook(recipe.id)}
-                                  disabled={submittingCook === recipe.id || !pendingRating[recipe.id]}
-                                  style={{ whiteSpace: "nowrap" }}
-                                >
-                                  {submittingCook === recipe.id ? "…" : "Submit"}
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="my-recipe-summary-side" onClick={(e) => e.stopPropagation()}>
+                              {recipe.cover_image_url && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={recipe.cover_image_url} alt={recipe.title} className="my-recipe-image" />
+                              )}
+                              <div className="my-recipe-actions">
+                                {recipe.user_rating ? (
+                                  <span style={{ fontSize: "0.85rem", color: "#065f46", fontWeight: 600 }}>
+                                    Cooked ★{recipe.user_rating}/5
+                                  </span>
+                                ) : awaitingRating[recipe.id] ? (
+                                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                    <select className="supplier-select"
+                                      value={pendingRating[recipe.id] ?? ""}
+                                      onChange={(e) => setPendingRating((prev) => ({ ...prev, [recipe.id]: Number(e.target.value) }))}
+                                      style={{ width: 70 }}>
+                                      <option value="">★</option>
+                                      {[1, 2, 3, 4, 5].map((n) => <option key={n} value={n}>{n}</option>)}
+                                    </select>
+                                    <button type="button" className="btn btn-primary"
+                                      onClick={() => handleCook(recipe.id)}
+                                      disabled={submittingCook === recipe.id || !pendingRating[recipe.id]}
+                                      style={{ whiteSpace: "nowrap" }}>
+                                      {submittingCook === recipe.id ? "…" : "Submit"}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button type="button" className="btn btn-secondary"
+                                    onClick={() => setAwaitingRating((prev) => ({ ...prev, [recipe.id]: true }))}>
+                                    Cooked
+                                  </button>
+                                )}
+                                <button type="button" className="btn btn-secondary supplier-action-btn"
+                                  onClick={() => handleRemoveRecipe(list.id, recipe.id)}
+                                  disabled={deletingRecipe === recipe.id}>
+                                  {deletingRecipe === recipe.id ? "…" : "Remove"}
                                 </button>
                               </div>
-                            ) : (
-                              <button
-                                type="button"
-                                className="btn btn-secondary"
-                                onClick={() => setAwaitingRating((prev) => ({ ...prev, [recipe.id]: true }))}
-                                style={{ whiteSpace: "nowrap" }}
-                              >
-                                Cooked
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              className="btn btn-secondary supplier-action-btn"
-                              onClick={() => handleRemoveRecipe(list.id, recipe.id)}
-                              disabled={deletingRecipe === recipe.id}
-                            >
-                              {deletingRecipe === recipe.id ? "…" : "Remove"}
+                            </div>
+
+                            <button type="button" className="my-recipe-expand-btn" aria-label="Toggle details">
+                              {isRecipeExpanded ? "▲" : "▼"}
                             </button>
                           </div>
+
+                          {/* ── Detail panel ────────────────────────── */}
+                          {isRecipeExpanded && (
+                            <div className="my-recipe-detail">
+                              {recipe.description && (
+                                <p className="my-recipe-description">{recipe.description}</p>
+                              )}
+
+                              {recipe.ingredients?.length > 0 && (
+                                <div className="my-recipe-scaler">
+                                  <span className="my-recipe-scaler-label">Scale servings</span>
+                                  <div className="my-recipe-scaler-controls">
+                                    <button type="button" className="my-scaler-btn"
+                                      onClick={() => setScaledServings((prev) => ({
+                                        ...prev, [recipe.id]: Math.max(1, (prev[recipe.id] ?? recipe.servings) - 1),
+                                      }))}>−</button>
+                                    <span className="my-scaler-value">{currentServings}</span>
+                                    <button type="button" className="my-scaler-btn"
+                                      onClick={() => setScaledServings((prev) => ({
+                                        ...prev, [recipe.id]: Math.min(100, (prev[recipe.id] ?? recipe.servings) + 1),
+                                      }))}>+</button>
+                                    <span className="my-scaler-hint">
+                                      {scale !== 1 && `(×${scale % 1 === 0 ? scale : scale.toFixed(2)} from ${recipe.servings})`}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+
+                              {recipe.ingredients?.length > 0 && (
+                                <div className="my-recipe-panel">
+                                  <strong className="my-recipe-label">Ingredients</strong>
+                                  <div className="my-recipe-ingredients">
+                                    {recipe.ingredients.map((ing) => {
+                                      const qty = ing.quantity * scale;
+                                      const display = qty % 1 === 0 ? qty : parseFloat(qty.toFixed(2));
+                                      return (
+                                        <span key={`${ing.ingredient_name}-${ing.quantity}`} className="my-ingredient-pill">
+                                          <span className="my-ingredient-qty">{display} {ing.unit}</span>
+                                          {ing.ingredient_name}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              )}
+
+                              {recipe.steps?.length > 0 && (
+                                <div className="my-recipe-panel">
+                                  <strong className="my-recipe-label">Instructions</strong>
+                                  <ol className="my-recipe-list">
+                                    {recipe.steps.map((step) => (
+                                      <li key={step.step_number} className="my-recipe-list-item">
+                                        {step.instruction}
+                                      </li>
+                                    ))}
+                                  </ol>
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
