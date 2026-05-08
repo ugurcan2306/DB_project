@@ -20,10 +20,14 @@ export async function GET(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "List not found or not yours." }, { status: 404 });
   }
 
-  const recipesResult = await db.query<{ id: string; title: string; description: string | null; difficulty: string; cooking_time_minutes: number; servings: number; dietary_tags: string[]; cover_image_url: string | null; is_deleted: boolean; author_name: string; added_at: string; user_rating: number | null }>(
+  const recipesResult = await db.query<{ id: string; title: string; description: string | null; difficulty: string; cooking_time_minutes: number; servings: number; dietary_tags: string[]; cover_image_url: string | null; is_deleted: boolean; author_name: string; added_at: string; user_rating: number | null; author_avg_rating: number | null }>(
     `SELECT r.id, r.title, r.description, r.difficulty, r.cooking_time_minutes, r.servings,
             r.dietary_tags, r.cover_image_url, r.is_deleted, u.full_name AS author_name, mlr.added_at,
-            cl.rating AS user_rating
+            cl.rating AS user_rating,
+            (SELECT ROUND(AVG(cl2.rating)::numeric, 1)
+             FROM cook_logs cl2
+             JOIN recipes r2 ON r2.id = cl2.recipe_id
+             WHERE r2.author_id = u.id) AS author_avg_rating
      FROM meal_list_recipes mlr
      JOIN recipes r ON r.id = mlr.recipe_id
      JOIN users u ON u.id = r.author_id
