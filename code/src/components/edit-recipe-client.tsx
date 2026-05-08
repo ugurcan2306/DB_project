@@ -58,6 +58,7 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
   const [difficulty, setDifficulty] = useState("medium");
   const [dietaryTags, setDietaryTags] = useState<string[]>([]);
   const [coverImageUrl, setCoverImageUrl] = useState("");
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
 
   const [availableIngredients, setAvailableIngredients] = useState<IngredientOption[]>([]);
   const [ingredientsLoading, setIngredientsLoading] = useState(true);
@@ -227,6 +228,23 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
 
     setSubmitting(true);
     try {
+      let finalCoverUrl = coverImageUrl;
+      if (coverImageFile) {
+        const formData = new FormData();
+        formData.append("photo", coverImageFile);
+        const uploadRes = await fetch("/api/recipes/photo", {
+          method: "POST",
+          body: formData,
+        });
+        const uploadJson = (await uploadRes.json()) as { error?: string; photoUrl?: string };
+        if (!uploadRes.ok || !uploadJson.photoUrl) {
+          setError(uploadJson.error ?? "Failed to upload photo.");
+          setSubmitting(false);
+          return;
+        }
+        finalCoverUrl = uploadJson.photoUrl;
+      }
+
       const res = await fetch(`/api/recipes/${recipeId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -237,7 +255,7 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
           cookingTimeMinutes: parseInt(cookingTime),
           difficulty,
           dietaryTags,
-          coverImageUrl: coverImageUrl.trim() || undefined,
+          coverImageUrl: finalCoverUrl.trim() || undefined,
           steps,
           ingredients: addedIngredients.map((i) => ({
             ingredientId: i.ingredientId,
@@ -313,8 +331,21 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
         </div>
 
         <div className="form-group auth-field">
-          <label htmlFor="recipe-cover">Cover Image URL</label>
-          <input id="recipe-cover" type="url" placeholder="https://example.com/image.jpg" value={coverImageUrl} onChange={(e) => setCoverImageUrl(e.target.value)} />
+          <label htmlFor="recipe-cover">Cover Image</label>
+          <input
+            id="recipe-cover"
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={(e) => setCoverImageFile(e.target.files?.[0] ?? null)}
+            className="supplier-input"
+          />
+          <p className="profile-upload-hint" style={{ marginTop: 8, fontSize: "0.85rem", color: "#666" }}>
+            {coverImageFile
+              ? `Selected: ${coverImageFile.name}`
+              : coverImageUrl
+              ? "Current photo will be kept unless a new file is selected."
+              : "No photo selected."}
+          </p>
         </div>
       </section>
 
