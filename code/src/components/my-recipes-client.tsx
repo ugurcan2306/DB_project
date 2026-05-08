@@ -1,7 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+
+const DIETARY_TAGS = [
+  { value: "vegan", label: "Vegan" },
+  { value: "vegetarian", label: "Vegetarian" },
+  { value: "keto", label: "Keto" },
+  { value: "gluten_free", label: "Gluten-Free" },
+  { value: "dairy_free", label: "Dairy-Free" },
+  { value: "nut_free", label: "Nut-Free" },
+  { value: "halal", label: "Halal" },
+  { value: "paleo", label: "Paleo" },
+];
+const DIFFICULTIES = ["easy", "medium", "hard"];
+const TIME_OPTIONS = [
+  { label: "Any", value: 0 },
+  { label: "≤ 15 min", value: 15 },
+  { label: "≤ 30 min", value: 30 },
+  { label: "≤ 60 min", value: 60 },
+  { label: "≤ 90 min", value: 90 },
+];
 
 type Step = {
   step_number: number;
@@ -36,6 +55,42 @@ export function MyRecipesClient({ userRole }: { userRole: string }) {
   const [error, setError] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
   const [sharing, setSharing] = useState<string | null>(null);
+
+  // Filter state
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [filterDifficulty, setFilterDifficulty] = useState<string[]>([]);
+  const [filterMaxTime, setFilterMaxTime] = useState(0);
+  const [filterIngredient, setFilterIngredient] = useState("");
+
+  const filteredRecipes = useMemo(() => {
+    return recipes.filter((r) => {
+      if (filterTags.length > 0 && !filterTags.every((t) => r.dietary_tags.includes(t))) return false;
+      if (filterDifficulty.length > 0 && !filterDifficulty.includes(r.difficulty)) return false;
+      if (filterMaxTime > 0 && r.cooking_time_minutes > filterMaxTime) return false;
+      if (filterIngredient.trim()) {
+        const term = filterIngredient.trim().toLowerCase();
+        const match = (r.ingredients ?? []).some((i) =>
+          (i.taxonomy_name ?? i.ingredient_name).toLowerCase().includes(term),
+        );
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [recipes, filterTags, filterDifficulty, filterMaxTime, filterIngredient]);
+
+  function toggleTag(val: string) {
+    setFilterTags((prev) => prev.includes(val) ? prev.filter((t) => t !== val) : [...prev, val]);
+  }
+  function toggleDifficulty(val: string) {
+    setFilterDifficulty((prev) => prev.includes(val) ? prev.filter((d) => d !== val) : [...prev, val]);
+  }
+  function clearFilters() {
+    setFilterTags([]);
+    setFilterDifficulty([]);
+    setFilterMaxTime(0);
+    setFilterIngredient("");
+  }
+  const isFiltered = filterTags.length > 0 || filterDifficulty.length > 0 || filterMaxTime > 0 || filterIngredient.trim();
 
   async function handleShare(id: string) {
     setSharing(id);
@@ -102,8 +157,90 @@ export function MyRecipesClient({ userRole }: { userRole: string }) {
           </p>
         </div>
       ) : (
+        <>
+          <div className="filter-section">
+            <div className="filter-row">
+              <div className="filter-group">
+                <span className="filter-label">Dietary Tags</span>
+                <div className="chip-group">
+                  {DIETARY_TAGS.map((tag) => (
+                    <button
+                      key={tag.value}
+                      type="button"
+                      className={`chip${filterTags.includes(tag.value) ? " active" : ""}`}
+                      onClick={() => toggleTag(tag.value)}
+                    >
+                      {tag.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="filter-group">
+                <span className="filter-label">Difficulty</span>
+                <div className="chip-group">
+                  {DIFFICULTIES.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      className={`chip${filterDifficulty.includes(d) ? " active" : ""}`}
+                      onClick={() => toggleDifficulty(d)}
+                    >
+                      {d.charAt(0).toUpperCase() + d.slice(1)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="filter-group">
+                <span className="filter-label">Max Cook Time</span>
+                <div className="chip-group">
+                  {TIME_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={`chip${filterMaxTime === opt.value ? " active" : ""}`}
+                      onClick={() => setFilterMaxTime(opt.value)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="filter-group">
+                <span className="filter-label">Ingredient</span>
+                <input
+                  type="text"
+                  placeholder="Search by ingredient…"
+                  value={filterIngredient}
+                  onChange={(e) => setFilterIngredient(e.target.value)}
+                  className="supplier-input"
+                  style={{ maxWidth: 220 }}
+                />
+              </div>
+            </div>
+
+            <div className="filter-footer">
+              <span className="filter-count">
+                {filteredRecipes.length} of {recipes.length} recipe{recipes.length === 1 ? "" : "s"}
+              </span>
+              {isFiltered && (
+                <button type="button" className="btn btn-secondary" onClick={clearFilters}>
+                  Clear Filters
+                </button>
+              )}
+            </div>
+          </div>
+
+          {filteredRecipes.length === 0 ? (
+            <div className="filter-section">
+              <p>No recipes match the selected filters.</p>
+            </div>
+          ) : null}
+
         <div className="my-recipes-grid">
-          {recipes.map((recipe) => (
+          {filteredRecipes.map((recipe) => (
             <article key={recipe.id} className="filter-section my-recipe-card">
               <div className="my-recipe-top">
                 <div className="my-recipe-main">
@@ -132,13 +269,17 @@ export function MyRecipesClient({ userRole }: { userRole: string }) {
                   {(recipe.ingredients?.length ?? 0) > 0 && (
                     <div className="my-recipe-panel">
                       <strong className="my-recipe-label">Ingredients</strong>
-                      <ul className="my-recipe-list">
+                      <div className="my-recipe-ingredients">
                         {(recipe.ingredients ?? []).map((ing) => (
-                          <li key={`${ing.ingredient_name}-${ing.quantity}-${ing.unit}`} className="my-recipe-list-item">
-                            {ing.quantity} {ing.unit} — {ing.taxonomy_name ?? ing.ingredient_name}
-                          </li>
+                          <span
+                            key={`${ing.ingredient_name}-${ing.quantity}-${ing.unit}`}
+                            className="my-ingredient-pill"
+                          >
+                            <span className="my-ingredient-qty">{ing.quantity} {ing.unit}</span>
+                            {ing.taxonomy_name ?? ing.ingredient_name}
+                          </span>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   )}
                   {(recipe.steps?.length ?? 0) > 0 && (
@@ -193,6 +334,7 @@ export function MyRecipesClient({ userRole }: { userRole: string }) {
             </article>
           ))}
         </div>
+        </>
       )}
     </div>
   );

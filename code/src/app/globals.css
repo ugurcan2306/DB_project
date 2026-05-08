@@ -1802,6 +1802,37 @@ a {
   font-size: 0.9rem;
 }
 
+.my-recipe-ingredients {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.my-ingredient-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: #f0faf1;
+  border: 1px solid #c8e6c9;
+  color: #2e6b31;
+  padding: 3px 10px 3px 6px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.my-ingredient-qty {
+  background: #c8e6c9;
+  color: #1b5e20;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .my-recipe-side {
   display: flex;
   flex-direction: column;
