@@ -18,6 +18,7 @@ export async function GET(request: Request) {
             u.email,
             u.role,
             u.is_active,
+            u.balance,
             u.created_at,
             vc.is_verified AS chef_verified
      FROM users u

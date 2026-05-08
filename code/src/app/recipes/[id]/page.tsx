@@ -25,7 +25,7 @@ export default async function RecipeDetailPage({ params }: Params) {
         }
       />
       <main className="container">
-        <RecipeDetailClient recipeId={id} />
+        <RecipeDetailClient recipeId={id} viewerRole={session.user.role} />
       </main>
     </>
   );

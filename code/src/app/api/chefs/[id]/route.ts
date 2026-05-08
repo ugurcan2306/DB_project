@@ -49,8 +49,8 @@ export async function GET(_req: Request, { params }: Params) {
        r.id, r.title, r.description, r.cooking_time_minutes, r.servings,
        r.difficulty, r.dietary_tags, r.cover_image_url, r.created_at,
        (SELECT ROUND(AVG(cl.rating)::numeric, 2)::float
-          FROM cook_logs cl WHERE cl.recipe_id = r.id) AS avg_rating,
-       (SELECT COUNT(*)::int FROM cook_logs cl WHERE cl.recipe_id = r.id) AS review_count
+          FROM cook_logs cl WHERE cl.recipe_id = r.id AND cl.rating IS NOT NULL) AS avg_rating,
+       (SELECT COUNT(*)::int FROM cook_logs cl WHERE cl.recipe_id = r.id AND cl.rating IS NOT NULL) AS review_count
      FROM recipes r
      WHERE r.author_id = $1 AND r.is_published = TRUE AND r.is_deleted = FALSE
      ORDER BY r.created_at DESC`,

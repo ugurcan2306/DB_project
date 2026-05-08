@@ -146,7 +146,9 @@ END $$;
 
 -- User management: soft-disable any user account
 ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS balance NUMERIC(12,2) NOT NULL DEFAULT 0;
+-- Initial credit on signup is $50.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS balance NUMERIC(12,2) NOT NULL DEFAULT 50;
+ALTER TABLE users ALTER COLUMN balance SET DEFAULT 50;
 
 -- Chef verification: admins can mark a chef as verified
 ALTER TABLE verified_chefs ADD COLUMN IF NOT EXISTS is_verified BOOLEAN NOT NULL DEFAULT FALSE;
@@ -360,7 +362,7 @@ CREATE TABLE IF NOT EXISTS cook_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-  rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  rating INT CHECK (rating IS NULL OR (rating >= 1 AND rating <= 5)),
   cooked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, recipe_id)
 );
@@ -368,6 +370,89 @@ CREATE TABLE IF NOT EXISTS cook_logs (
 -- Royalty tracking: distinguish manual reviews from Shop-This-Meal purchases.
 ALTER TABLE cook_logs
   ADD COLUMN IF NOT EXISTS source VARCHAR(20) NOT NULL DEFAULT 'manual';
+
+-- Allow rating to be NULL for purchase-only logs (user hasn't rated yet).
+ALTER TABLE cook_logs ALTER COLUMN rating DROP NOT NULL;
+
+-- =========================================================
+-- recipe_purchases — append-only ledger
+-- One row per "Shop This Meal" checkout of a recipe. Unlike cook_logs
+-- (which is unique per (user, recipe)), this captures EVERY purchase
+-- so a user buying the same recipe N times credits the chef N times.
+-- royalty_amount stores the chef's earnings for that purchase, computed
+-- as 5% of total_price at checkout time (rate kept in sync with
+-- ROYALTY_PERCENT in lib/royalties.ts).
+-- =========================================================
+CREATE TABLE IF NOT EXISTS recipe_purchases (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  recipe_id UUID NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+  shopping_cart_id UUID,
+  total_price NUMERIC(12,2) NOT NULL CHECK (total_price >= 0),
+  royalty_amount NUMERIC(12,2) NOT NULL CHECK (royalty_amount >= 0),
+  purchased_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_recipe_purchases_recipe ON recipe_purchases(recipe_id);
+CREATE INDEX IF NOT EXISTS idx_recipe_purchases_user ON recipe_purchases(user_id);
+
+-- =========================================================
+-- TRG_Update_Chef_Royalty
+-- Spec requirement: automatically credit the chef's balance after a
+-- successful purchase. Now percent-based + multi-purchase aware.
+--
+--   On recipe_purchases INSERT  → credit chef NEW.royalty_amount (5% of cart)
+--   On cook_logs INSERT (manual)→ credit chef +$0.10 (one-time review fee)
+--
+-- Two trigger statements share the same function and dispatch on TG_TABLE_NAME.
+-- =========================================================
+CREATE OR REPLACE FUNCTION trg_update_chef_royalty()
+RETURNS TRIGGER AS $$
+DECLARE
+  v_delta NUMERIC(12,2) := 0;
+  v_author UUID;
+  v_recipe_id UUID;
+BEGIN
+  IF TG_TABLE_NAME = 'recipe_purchases' THEN
+    v_delta := NEW.royalty_amount;
+    v_recipe_id := NEW.recipe_id;
+  ELSIF TG_TABLE_NAME = 'cook_logs' THEN
+    -- Only the first manual cook log earns the review fee.
+    -- (UPDATE ... SET rating doesn't fire this trigger because we listen on INSERT only here.)
+    IF TG_OP = 'INSERT' AND NEW.source = 'manual' THEN
+      v_delta := 0.10;
+      v_recipe_id := NEW.recipe_id;
+    END IF;
+  END IF;
+
+  IF v_delta > 0 THEN
+    SELECT author_id INTO v_author FROM recipes WHERE id = v_recipe_id;
+    IF v_author IS NOT NULL THEN
+      UPDATE users SET balance = balance + v_delta WHERE id = v_author;
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS TRG_Update_Chef_Royalty ON cook_logs;
+DROP TRIGGER IF EXISTS TRG_Update_Chef_Royalty ON recipe_purchases;
+
+CREATE TRIGGER TRG_Update_Chef_Royalty
+AFTER INSERT ON recipe_purchases
+FOR EACH ROW
+EXECUTE FUNCTION trg_update_chef_royalty();
+
+CREATE TRIGGER TRG_Update_Chef_Royalty
+AFTER INSERT ON cook_logs
+FOR EACH ROW
+EXECUTE FUNCTION trg_update_chef_royalty();
+
+-- Helpful indexes for alias-based substitution lookup.
+CREATE INDEX IF NOT EXISTS idx_ingredient_aliases_canonical
+  ON ingredient_aliases(canonical_ingredient_id);
+CREATE INDEX IF NOT EXISTS idx_supplier_inventory_ingredient
+  ON supplier_inventory_items(ingredient_id) WHERE is_active = TRUE;
 
 -- =========================================================
 -- Meal Lists
@@ -403,3 +488,68 @@ CREATE TABLE IF NOT EXISTS meal_list_recipes (
   added_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- =========================================================
+-- Spec-required View: ChefRoyaltyDashboard
+-- Aggregates per-recipe purchase + review activity for chefs.
+-- Pulls purchase counts/royalty from the recipe_purchases ledger
+-- (so multi-buys count correctly). Review royalty is +$0.10 per manual log.
+-- Rates MUST stay in sync with TRG_Update_Chef_Royalty.
+-- =========================================================
+DROP VIEW IF EXISTS ChefRoyaltyDashboard;
+CREATE VIEW ChefRoyaltyDashboard AS
+SELECT
+  r.author_id                                                              AS chef_user_id,
+  u.full_name                                                              AS chef_name,
+  r.id                                                                     AS recipe_id,
+  r.title                                                                  AS recipe_title,
+  r.cover_image_url                                                        AS cover_image_url,
+  r.is_published                                                           AS is_published,
+  COALESCE((SELECT COUNT(*)::int FROM recipe_purchases rp
+              WHERE rp.recipe_id = r.id), 0)                               AS purchase_count,
+  COALESCE((SELECT SUM(rp.royalty_amount) FROM recipe_purchases rp
+              WHERE rp.recipe_id = r.id), 0)::numeric(12,2)                AS purchase_royalty,
+  COALESCE((SELECT SUM(rp.total_price) FROM recipe_purchases rp
+              WHERE rp.recipe_id = r.id), 0)::numeric(12,2)                AS purchase_revenue,
+  COALESCE((SELECT COUNT(*)::int FROM cook_logs cl
+              WHERE cl.recipe_id = r.id AND cl.source = 'manual'), 0)      AS review_count,
+  (SELECT ROUND(AVG(rating)::numeric, 2) FROM cook_logs cl
+     WHERE cl.recipe_id = r.id AND cl.rating IS NOT NULL)                  AS avg_rating,
+  (
+    COALESCE((SELECT SUM(rp.royalty_amount) FROM recipe_purchases rp
+                WHERE rp.recipe_id = r.id), 0)
+    + COALESCE((SELECT COUNT(*) FROM cook_logs cl
+                  WHERE cl.recipe_id = r.id AND cl.source = 'manual'), 0) * 0.10
+  )::numeric(12,2)                                                         AS royalty_earned
+FROM recipes r
+JOIN users u ON u.id = r.author_id
+WHERE r.is_deleted = FALSE;
+
+-- =========================================================
+-- Spec-required View: ActiveCartSummary
+-- For each user's active (still pending) shopping cart, lists the
+-- per-supplier line items, the matched ingredient, the unit price,
+-- the subtotal, and the cart-level total.
+-- A cart is "active" while at least one of its supplier_orders is still pending.
+-- =========================================================
+CREATE OR REPLACE VIEW ActiveCartSummary AS
+SELECT
+  so.shopping_cart_id                                                      AS cart_id,
+  so.home_cook_id                                                          AS home_cook_id,
+  so.id                                                                    AS supplier_order_id,
+  so.supplier_id                                                           AS supplier_id,
+  ls.business_name                                                         AS supplier_name,
+  soi.ingredient_id                                                        AS ingredient_id,
+  i.ingredient_name                                                        AS ingredient_name,
+  soi.quantity                                                             AS quantity,
+  soi.unit                                                                 AS unit,
+  soi.price_per_unit                                                       AS unit_price,
+  soi.line_total                                                           AS line_total,
+  so.total_price                                                           AS supplier_subtotal,
+  SUM(so.total_price) OVER (PARTITION BY so.shopping_cart_id)              AS cart_total,
+  so.created_at                                                            AS cart_created_at
+FROM supplier_orders so
+JOIN supplier_order_items soi ON soi.supplier_order_id = so.id
+JOIN ingredients i             ON i.id = soi.ingredient_id
+LEFT JOIN local_suppliers ls   ON ls.user_id = so.supplier_id
+WHERE so.shopping_cart_id IS NOT NULL
+  AND so.status = 'pending';

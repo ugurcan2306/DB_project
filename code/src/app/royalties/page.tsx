@@ -5,7 +5,7 @@ import { getUserProfile } from "@/lib/profile";
 import { AppNavbar } from "@/components/app-navbar";
 import {
   getChefRoyaltyDashboard,
-  ROYALTY_PER_PURCHASE,
+  ROYALTY_PERCENT,
   ROYALTY_PER_REVIEW,
 } from "@/lib/royalties";
 
@@ -27,8 +27,8 @@ export default async function RoyaltiesPage() {
         <div className="page-header">
           <h1>💰 Royalty Dashboard</h1>
           <p>
-            Earn ${ROYALTY_PER_PURCHASE.toFixed(2)} every time a home cook purchases ingredients via &quot;Shop This Meal&quot;,
-            and ${ROYALTY_PER_REVIEW.toFixed(2)} for each manual cook log/review.
+            Earn {(ROYALTY_PERCENT * 100).toFixed(0)}% of every &quot;Shop This Meal&quot; purchase total
+            (multi-buys count separately), plus ${ROYALTY_PER_REVIEW.toFixed(2)} for each first-time manual cook log.
           </p>
         </div>
 
@@ -43,8 +43,14 @@ export default async function RoyaltiesPage() {
           <SummaryCard
             label="Total Purchases"
             value={data.totalPurchases.toString()}
-            sub={`Shop This Meal · $${ROYALTY_PER_PURCHASE.toFixed(2)} each`}
+            sub={`Shop This Meal events · ${(ROYALTY_PERCENT * 100).toFixed(0)}% of cart`}
             color="#27ae60"
+          />
+          <SummaryCard
+            label="Gross Sales"
+            value={`$${data.totalRevenue.toFixed(2)}`}
+            sub="Total cart value across all your recipes"
+            color="#16a085"
           />
           <SummaryCard
             label="Total Reviews"
@@ -76,7 +82,8 @@ export default async function RoyaltiesPage() {
                 <thead>
                   <tr>
                     <th>Recipe</th>
-                    <th style={{ textAlign: "right" }}>Cooked (Purchased)</th>
+                    <th style={{ textAlign: "right" }}>Purchases</th>
+                    <th style={{ textAlign: "right" }}>Gross Sales</th>
                     <th style={{ textAlign: "right" }}>Reviews / Logs</th>
                     <th style={{ textAlign: "right" }}>Avg Rating</th>
                     <th style={{ textAlign: "right" }}>Royalties Earned</th>
@@ -105,6 +112,7 @@ export default async function RoyaltiesPage() {
                       <td style={{ textAlign: "right" }}>
                         <strong>{r.purchase_count}</strong>
                       </td>
+                      <td style={{ textAlign: "right" }}>${r.purchase_revenue.toFixed(2)}</td>
                       <td style={{ textAlign: "right" }}>{r.review_count}</td>
                       <td style={{ textAlign: "right" }}>
                         {r.avg_rating !== null ? `${r.avg_rating.toFixed(2)} ★` : "—"}
@@ -122,6 +130,9 @@ export default async function RoyaltiesPage() {
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <strong>{data.totalPurchases}</strong>
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      <strong>${data.totalRevenue.toFixed(2)}</strong>
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <strong>{data.totalReviews}</strong>

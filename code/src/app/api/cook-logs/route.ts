@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getDb } from "@/db/pool";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { creditRoyaltyForCookLog } from "@/lib/royalties";
+import { autoLogRecipeForChallenges } from "@/lib/challenges";
 
 export async function POST(request: Request) {
   const session = await getServerSession(authOptions);
@@ -15,17 +15,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Rating must be between 1 and 5." }, { status: 400 });
   }
 
-  const db = getDb();
-  const client = await db.connect();
+  const client = await getDb().connect();
   try {
     await client.query("BEGIN");
 
-    const prevSourceRes = await client.query<{ source: string }>(
-      `SELECT source FROM cook_logs WHERE user_id = $1 AND recipe_id = $2`,
+    // Was this user's first time logging this recipe? If yes, we'll bump challenges.
+    const existing = await client.query<{ id: string }>(
+      `SELECT id FROM cook_logs WHERE user_id = $1 AND recipe_id = $2`,
       [session.user.id, body.recipeId],
     );
-    const prevSource = prevSourceRes.rows[0]?.source ?? null;
+    const isFirstLog = existing.rowCount === 0;
 
+    // Royalty crediting is handled by TRG_Update_Chef_Royalty (db trigger).
+    // For 'manual' inserts the trigger credits +$0.10. If a row already exists
+    // (e.g. user bought it earlier), source stays 'purchased' and the trigger
+    // does nothing on a rating-only update — which is correct.
     await client.query(
       `INSERT INTO cook_logs (user_id, recipe_id, rating, source)
        VALUES ($1, $2, $3, 'manual')
@@ -34,10 +38,17 @@ export async function POST(request: Request) {
       [session.user.id, body.recipeId, body.rating],
     );
 
-    await creditRoyaltyForCookLog(client, body.recipeId, prevSource, "manual");
+    // Spec: "The system tracks progress as the user cooks qualifying recipes"
+    // → submitting a cook log counts as having cooked the recipe, so bump
+    // any matching active challenges. Only fire on first log to avoid double-counting
+    // when the user later edits their rating.
+    let challengesAdvanced: string[] = [];
+    if (isFirstLog) {
+      challengesAdvanced = await autoLogRecipeForChallenges(client, session.user.id, body.recipeId);
+    }
 
     await client.query("COMMIT");
-    return NextResponse.json({ success: true, rating: body.rating });
+    return NextResponse.json({ success: true, rating: body.rating, challengesAdvanced });
   } catch {
     await client.query("ROLLBACK");
     return NextResponse.json({ error: "Failed to save cook log." }, { status: 500 });
