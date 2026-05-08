@@ -103,27 +103,27 @@ export function EditRecipeClient({ recipeId }: { recipeId: string }) {
         const options: IngredientOption[] = [];
         const aliases = aliasData.aliases ?? [];
         const canonicals = ingData.ingredients ?? [];
-        if (aliases.length > 0) {
-          for (const alias of aliases) {
-            options.push({
-              value: `alias:${alias.id}`,
-              ingredientId: alias.canonical_ingredient_id,
-              aliasId: alias.id,
-              label: `${alias.alias_name} (${alias.canonical_name})`,
-            });
-          }
-        } else {
-          for (const ingredient of canonicals) {
-            options.push({
-              value: `ingredient:${ingredient.id}`,
-              ingredientId: ingredient.id,
-              aliasId: null,
-              label: ingredient.category_name
-                ? `${ingredient.ingredient_name} (${ingredient.category_name})`
-                : ingredient.ingredient_name,
-            });
-          }
+
+        for (const ingredient of canonicals) {
+          options.push({
+            value: `ingredient:${ingredient.id}`,
+            ingredientId: ingredient.id,
+            aliasId: null,
+            label: ingredient.category_name
+              ? `${ingredient.ingredient_name} (${ingredient.category_name})`
+              : ingredient.ingredient_name,
+          });
         }
+        for (const alias of aliases) {
+          options.push({
+            value: `alias:${alias.id}`,
+            ingredientId: alias.canonical_ingredient_id,
+            aliasId: alias.id,
+            label: `${alias.alias_name} (${alias.canonical_name})`,
+          });
+        }
+        options.sort((a, b) => a.label.localeCompare(b.label));
+
         setAvailableIngredients(options);
         if (options.length) setSelectedIngredientId(options[0].value);
 

@@ -10,7 +10,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = (await request.json()) as {
     is_active?: boolean;
     is_verified?: boolean;
+    balance?: number;
   };
+
+  if (body.balance !== undefined) {
+    if (!Number.isFinite(body.balance) || body.balance < 0) {
+      return NextResponse.json({ error: "Balance must be a non-negative number." }, { status: 400 });
+    }
+  }
 
   const client = await getDb().connect();
   try {
@@ -27,6 +34,13 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       await client.query(
         `UPDATE verified_chefs SET is_verified = $1 WHERE user_id = $2`,
         [body.is_verified, id],
+      );
+    }
+
+    if (body.balance !== undefined) {
+      await client.query(
+        `UPDATE users SET balance = $1::numeric WHERE id = $2`,
+        [body.balance, id],
       );
     }
 

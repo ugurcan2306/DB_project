@@ -3,7 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getUserProfile } from "@/lib/profile";
 import { AppNavbar } from "@/components/app-navbar";
-import { listAllChallenges } from "@/lib/challenges";
+import { listAllChallenges, listAllBadges } from "@/lib/challenges";
+import { getDb } from "@/db/pool";
 import { AdminChallengesClient } from "./admin-challenges-client";
 
 export default async function AdminChallengesPage() {
@@ -12,7 +13,14 @@ export default async function AdminChallengesPage() {
   if (session.user.role !== "admin") redirect("/dashboard");
 
   const profile = await getUserProfile(session.user.id);
-  const challenges = await listAllChallenges();
+
+  const [challenges, badges, ingredientsRes] = await Promise.all([
+    listAllChallenges(),
+    listAllBadges(),
+    getDb().query<{ id: string; ingredient_name: string }>(
+      `SELECT id, ingredient_name FROM ingredients ORDER BY ingredient_name ASC`,
+    ),
+  ]);
 
   return (
     <>
@@ -25,7 +33,11 @@ export default async function AdminChallengesPage() {
           <h1>Admin — Challenge Management</h1>
           <p>Create, edit, and delete kitchen challenges.</p>
         </div>
-        <AdminChallengesClient challenges={challenges} />
+        <AdminChallengesClient
+          challenges={challenges}
+          badges={badges}
+          ingredients={ingredientsRes.rows}
+        />
       </main>
     </>
   );

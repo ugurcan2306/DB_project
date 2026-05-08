@@ -22,9 +22,9 @@ export async function GET(_req: Request, { params }: Params) {
               SELECT 1 FROM follows f WHERE f.follower_id = $2 AND f.followed_id = u.id
             ) AS is_following_author,
             (SELECT ROUND(AVG(cl.rating)::numeric, 2)::float
-              FROM cook_logs cl WHERE cl.recipe_id = r.id) AS avg_rating,
+              FROM cook_logs cl WHERE cl.recipe_id = r.id AND cl.rating IS NOT NULL) AS avg_rating,
             (SELECT COUNT(*)::int
-              FROM cook_logs cl WHERE cl.recipe_id = r.id) AS review_count,
+              FROM cook_logs cl WHERE cl.recipe_id = r.id AND cl.rating IS NOT NULL) AS review_count,
             (SELECT cl.rating FROM cook_logs cl
               WHERE cl.recipe_id = r.id AND cl.user_id = $2) AS my_rating
      FROM recipes r
@@ -44,11 +44,17 @@ export async function GET(_req: Request, { params }: Params) {
   );
 
   const ingredientsResult = await db.query(
-    `SELECT ri.ingredient_id, i.ingredient_name, ri.quantity, ri.unit
+    `SELECT ri.ingredient_id,
+            ri.alias_id,
+            i.ingredient_name AS canonical_name,
+            COALESCE(ia.alias_name, i.ingredient_name) AS ingredient_name,
+            ri.quantity,
+            ri.unit
      FROM recipe_ingredients ri
      JOIN ingredients i ON i.id = ri.ingredient_id
+     LEFT JOIN ingredient_aliases ia ON ia.id = ri.alias_id
      WHERE ri.recipe_id = $1
-     ORDER BY i.ingredient_name`,
+     ORDER BY ingredient_name`,
     [id],
   );
 

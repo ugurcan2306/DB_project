@@ -3,11 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getDb } from "@/db/pool";
 import { logSupplierAction } from "@/lib/supplier-history";
-import { creditRoyaltyForCookLog } from "@/lib/royalties";
+import { autoLogRecipeForChallenges } from "@/lib/challenges";
+import { convertQuantity } from "@/lib/units";
 import { randomUUID } from "node:crypto";
 
 type IngredientInput = {
   ingredientId: string;
+  aliasId?: string | null;
   ingredientName: string;
   quantity: number;
   unit: string;
@@ -17,7 +19,9 @@ type SupplierStock = {
   inventory_item_id: string;
   supplier_id: string;
   ingredient_id: string;
-  ingredient_name: string;
+  alias_id: string | null;
+  ingredient_name: string; // canonical name
+  display_name: string;    // alias name if alias_id else canonical name
   unit_price: string;
   current_stock: string;
   unit: string;
@@ -33,10 +37,13 @@ export async function POST(request: Request) {
     recipeId?: string;
     recipeTitle?: string;
     ingredients?: IngredientInput[];
+    scale?: number;
   };
   if (!body.recipeId || !body.ingredients?.length) {
     return NextResponse.json({ error: "Recipe and ingredients are required." }, { status: 400 });
   }
+
+  const scale = Number.isFinite(body.scale) && (body.scale ?? 1) > 0 ? Number(body.scale) : 1;
 
   const db = getDb();
   const client = await db.connect();
@@ -69,98 +76,121 @@ export async function POST(request: Request) {
     let totalPrice = 0;
 
     for (const ingredient of body.ingredients) {
-      const needed = Number(ingredient.quantity);
+      const needed = Number(ingredient.quantity) * scale;
       if (!needed || needed <= 0) continue;
 
-      const stockResult = await client.query<SupplierStock>(
+      const requestedAliasId = ingredient.aliasId ?? null;
+
+      // Phase 1 — exact match: same (ingredient_id, alias_id) tuple.
+      // IS NOT DISTINCT FROM treats NULL = NULL as a match.
+      const exactRes = await client.query<SupplierStock>(
         `SELECT sii.id AS inventory_item_id,
                 sii.supplier_id,
                 sii.ingredient_id,
+                sii.alias_id,
                 i.ingredient_name,
+                COALESCE(ia.alias_name, i.ingredient_name) AS display_name,
                 sii.unit_price,
                 sii.current_stock,
                 sii.unit
          FROM supplier_inventory_items sii
          JOIN ingredients i ON i.id = sii.ingredient_id
+         LEFT JOIN ingredient_aliases ia ON ia.id = sii.alias_id
          WHERE sii.ingredient_id = $1
+           AND sii.alias_id IS NOT DISTINCT FROM $2::uuid
            AND sii.is_active = TRUE
            AND sii.current_stock > 0
          ORDER BY sii.unit_price ASC, sii.current_stock DESC`,
-        [ingredient.ingredientId],
-      );
-
-      const categoryResult = await client.query<{ category_id: string | null }>(
-        `SELECT category_id FROM ingredients WHERE id = $1`,
-        [ingredient.ingredientId],
+        [ingredient.ingredientId, requestedAliasId],
       );
 
       let remaining = needed;
       let availableTotal = 0;
-      for (const row of stockResult.rows) {
-        const available = Number(row.current_stock);
-        availableTotal += available;
-        if (remaining <= 0) break;
-        const take = Math.min(remaining, available);
-        if (take <= 0) continue;
+      for (const row of exactRes.rows) {
+        const availableInSupplierUnit = Number(row.current_stock);
+        const supplierUnit = row.unit || ingredient.unit;
+        const availableInRecipeUnit = convertQuantity(availableInSupplierUnit, supplierUnit, ingredient.unit);
+
+        availableTotal += availableInRecipeUnit;
+        if (remaining <= 1e-6) break;
+        
+        const takeInRecipeUnit = Math.min(remaining, availableInRecipeUnit);
+        if (takeInRecipeUnit <= 1e-6) continue;
+
+        const takeInSupplierUnit = convertQuantity(takeInRecipeUnit, ingredient.unit, supplierUnit);
         const unitPrice = Number(row.unit_price);
-        const lineTotal = unitPrice * take;
+        const lineTotal = unitPrice * takeInSupplierUnit;
+        
         allocations.push({
           supplierId: row.supplier_id,
           inventoryItemId: row.inventory_item_id,
           ingredientId: row.ingredient_id,
-          ingredientName: row.ingredient_name,
+          ingredientName: row.display_name,
           requestedIngredientName: ingredient.ingredientName,
-          quantity: take,
-          unit: row.unit || ingredient.unit,
+          quantity: takeInSupplierUnit,
+          unit: supplierUnit,
           unitPrice,
           lineTotal,
         });
         totalPrice += lineTotal;
-        remaining -= take;
+        remaining -= takeInRecipeUnit;
       }
 
-      if (remaining > 0 && categoryResult.rows[0]?.category_id) {
-        const altResult = await client.query<SupplierStock>(
+      // Phase 2 — substitute: same canonical ingredient, DIFFERENT alias_id.
+      // Covers (a) recipe wants generic but only variants stocked, AND
+      //         (b) recipe wants Roma but only Vine/generic stocked.
+      if (remaining > 0) {
+        const substRes = await client.query<SupplierStock>(
           `SELECT sii.id AS inventory_item_id,
                   sii.supplier_id,
                   sii.ingredient_id,
+                  sii.alias_id,
                   i.ingredient_name,
+                  COALESCE(ia.alias_name, i.ingredient_name) AS display_name,
                   sii.unit_price,
                   sii.current_stock,
                   sii.unit
            FROM supplier_inventory_items sii
            JOIN ingredients i ON i.id = sii.ingredient_id
-           WHERE i.category_id = $1
-             AND sii.ingredient_id <> $2
+           LEFT JOIN ingredient_aliases ia ON ia.id = sii.alias_id
+           WHERE sii.ingredient_id = $1
+             AND sii.alias_id IS DISTINCT FROM $2::uuid
              AND sii.is_active = TRUE
              AND sii.current_stock > 0
            ORDER BY sii.unit_price ASC, sii.current_stock DESC`,
-          [categoryResult.rows[0].category_id, ingredient.ingredientId],
+          [ingredient.ingredientId, requestedAliasId],
         );
 
         const usedAltNames = new Set<string>();
-        for (const row of altResult.rows) {
-          const available = Number(row.current_stock);
-          availableTotal += available;
-          if (remaining <= 0) break;
-          const take = Math.min(remaining, available);
-          if (take <= 0) continue;
+        for (const row of substRes.rows) {
+          const availableInSupplierUnit = Number(row.current_stock);
+          const supplierUnit = row.unit || ingredient.unit;
+          const availableInRecipeUnit = convertQuantity(availableInSupplierUnit, supplierUnit, ingredient.unit);
+
+          availableTotal += availableInRecipeUnit;
+          if (remaining <= 1e-6) break;
+          
+          const takeInRecipeUnit = Math.min(remaining, availableInRecipeUnit);
+          if (takeInRecipeUnit <= 1e-6) continue;
+
+          const takeInSupplierUnit = convertQuantity(takeInRecipeUnit, ingredient.unit, supplierUnit);
           const unitPrice = Number(row.unit_price);
-          const lineTotal = unitPrice * take;
+          const lineTotal = unitPrice * takeInSupplierUnit;
+          
           allocations.push({
             supplierId: row.supplier_id,
             inventoryItemId: row.inventory_item_id,
             ingredientId: row.ingredient_id,
-            ingredientName: row.ingredient_name,
+            ingredientName: row.display_name,
             requestedIngredientName: ingredient.ingredientName,
-            quantity: take,
-            unit: row.unit || ingredient.unit,
+            quantity: takeInSupplierUnit,
+            unit: supplierUnit,
             unitPrice,
             lineTotal,
           });
           totalPrice += lineTotal;
-          remaining -= take;
-          usedAltNames.add(row.ingredient_name);
+          remaining -= takeInRecipeUnit;
+          usedAltNames.add(row.display_name);
         }
 
         if (usedAltNames.size) {
@@ -171,7 +201,7 @@ export async function POST(request: Request) {
         }
       }
 
-      if (remaining > 0) {
+      if (remaining > 1e-6) {
         shortages.push({
           ingredientName: ingredient.ingredientName,
           required: needed,
@@ -276,22 +306,34 @@ export async function POST(request: Request) {
       [totalPrice, session.user.id],
     );
 
-    // Record the purchase as a cook_log with source='purchased' and credit chef royalties.
-    const prevSourceRes = await client.query<{ source: string }>(
-      `SELECT source FROM cook_logs WHERE user_id = $1 AND recipe_id = $2`,
-      [session.user.id, body.recipeId],
-    );
-    const prevSource = prevSourceRes.rows[0]?.source ?? null;
-
+    // Record the purchase as a cook_log with source='purchased'.
+    // rating is NULL — the user hasn't reviewed yet, only purchased.
+    // (cook_logs is unique per (user, recipe) → tracks "ever bought/cooked".)
     await client.query(
       `INSERT INTO cook_logs (user_id, recipe_id, rating, source)
-       VALUES ($1, $2, 5, 'purchased')
+       VALUES ($1, $2, NULL, 'purchased')
        ON CONFLICT (user_id, recipe_id)
        DO UPDATE SET source = 'purchased', cooked_at = NOW()`,
       [session.user.id, body.recipeId],
     );
 
-    await creditRoyaltyForCookLog(client, body.recipeId, prevSource, "purchased");
+    // Append the actual purchase event to the royalty ledger.
+    // TRG_Update_Chef_Royalty fires on this insert and credits the chef
+    // royalty_amount = 5% of totalPrice. This means buying the same recipe
+    // multiple times credits the chef multiple times.
+    const royaltyAmount = +(totalPrice * 0.05).toFixed(2);
+    await client.query(
+      `INSERT INTO recipe_purchases (user_id, recipe_id, shopping_cart_id, total_price, royalty_amount)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [session.user.id, body.recipeId, shoppingCartId, totalPrice, royaltyAmount],
+    );
+
+    // Auto-advance any challenges this recipe qualifies for.
+    const challengesAdvanced = await autoLogRecipeForChallenges(
+      client,
+      session.user.id,
+      body.recipeId,
+    );
 
     await client.query("COMMIT");
     return NextResponse.json({
@@ -302,6 +344,8 @@ export async function POST(request: Request) {
       supplierOrdersCreated: Array.from(orderBySupplier.values()).length,
       substitutionsUsed: substitutionNotes.length > 0,
       substitutionNotes,
+      scaleApplied: scale,
+      challengesAdvanced,
     });
   } catch {
     await client.query("ROLLBACK");
@@ -310,4 +354,3 @@ export async function POST(request: Request) {
     client.release();
   }
 }
-

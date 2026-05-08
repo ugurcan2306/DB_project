@@ -65,7 +65,7 @@ export function CreateRecipeClient() {
   // Ingredients state
   const [availableIngredients, setAvailableIngredients] = useState<IngredientOption[]>([]);
   const [ingredientsLoading, setIngredientsLoading] = useState(true);
-  const [selectedIngredientId, setSelectedIngredientId] = useState("");
+  const [pickedIngredient, setPickedIngredient] = useState<IngredientOption | null>(null);
   const [ingredientQty, setIngredientQty] = useState("");
   const [ingredientUnit, setIngredientUnit] = useState("g");
   const [addedIngredients, setAddedIngredients] = useState<IngredientRow[]>([]);
@@ -101,30 +101,32 @@ export function CreateRecipeClient() {
         const aliases = aliasData.aliases ?? [];
         const canonicals = ingredientData.ingredients ?? [];
 
-        if (aliases.length > 0) {
-          for (const alias of aliases) {
-            options.push({
-              value: `alias:${alias.id}`,
-              ingredientId: alias.canonical_ingredient_id,
-              aliasId: alias.id,
-              label: `${alias.alias_name} (${alias.canonical_name})`,
-            });
-          }
-        } else {
-          for (const ingredient of canonicals) {
-            options.push({
-              value: `ingredient:${ingredient.id}`,
-              ingredientId: ingredient.id,
-              aliasId: null,
-              label: ingredient.category_name
-                ? `${ingredient.ingredient_name} (${ingredient.category_name})`
-                : ingredient.ingredient_name,
-            });
-          }
+        // Always show every canonical ingredient.
+        for (const ingredient of canonicals) {
+          options.push({
+            value: `ingredient:${ingredient.id}`,
+            ingredientId: ingredient.id,
+            aliasId: null,
+            label: ingredient.category_name
+              ? `${ingredient.ingredient_name} (${ingredient.category_name})`
+              : ingredient.ingredient_name,
+          });
         }
 
+        // Plus any taxonomy aliases as more-specific extra picks.
+        for (const alias of aliases) {
+          options.push({
+            value: `alias:${alias.id}`,
+            ingredientId: alias.canonical_ingredient_id,
+            aliasId: alias.id,
+            label: `${alias.alias_name} → ${alias.canonical_name}`,
+          });
+        }
+
+        // Sort alphabetically by label for a sane picker order.
+        options.sort((a, b) => a.label.localeCompare(b.label));
+
         setAvailableIngredients(options);
-        if (options.length) setSelectedIngredientId(options[0].value);
       })
       .catch(() => setError("Failed to load ingredients."))
       .finally(() => setIngredientsLoading(false));
@@ -206,16 +208,26 @@ export function CreateRecipeClient() {
     );
   }
 
-  function addIngredient() {
-    if (!selectedIngredientId) return;
-    const qty = parseFloat(ingredientQty);
-    if (!ingredientQty || isNaN(qty) || qty <= 0) {
-      setError("Please enter a valid quantity.");
+  function pickIngredient(opt: IngredientOption) {
+    setPickedIngredient(opt);
+    setError("");
+  }
+
+  function addPickedIngredient() {
+    if (!pickedIngredient) {
+      setError("Click an ingredient from the list first.");
       return;
     }
-    const found = availableIngredients.find((i) => i.value === selectedIngredientId);
-    if (!found) return;
-    if (addedIngredients.some((i) => i.ingredientId === found.ingredientId && i.aliasId === found.aliasId)) {
+    const qty = parseFloat(ingredientQty);
+    if (!ingredientQty || isNaN(qty) || qty <= 0) {
+      setError("Enter a valid quantity.");
+      return;
+    }
+    if (
+      addedIngredients.some(
+        (i) => i.ingredientId === pickedIngredient.ingredientId && i.aliasId === pickedIngredient.aliasId,
+      )
+    ) {
       setError("That ingredient is already added.");
       return;
     }
@@ -223,15 +235,18 @@ export function CreateRecipeClient() {
     setAddedIngredients((prev) => [
       ...prev,
       {
-        ingredientId: found.ingredientId,
-        aliasId: found.aliasId,
-        ingredientName: found.label,
+        ingredientId: pickedIngredient.ingredientId,
+        aliasId: pickedIngredient.aliasId,
+        ingredientName: pickedIngredient.label,
         quantity: ingredientQty,
         unit: ingredientUnit,
       },
     ]);
     setIngredientQty("");
+    setIngredientSearch("");
+    setPickedIngredient(null);
   }
+
 
   function removeIngredient(ingredientId: string, aliasId: string | null) {
     setAddedIngredients((prev) => prev.filter((i) => !(i.ingredientId === ingredientId && i.aliasId === aliasId)));
@@ -447,106 +462,133 @@ export function CreateRecipeClient() {
           Select from standardized ingredients to ensure proper supplier matching.
         </p>
 
-        <div className="recipe-ingredient-row">
-          <div className="form-group" style={{ flex: 2 }}>
-            <label>Ingredient *</label>
-            {ingredientsLoading ? (
-              <p className="recipe-loading">Loading ingredients…</p>
+        {/* STEP 1: pick an ingredient from the list */}
+        <div className="form-group" style={{ marginBottom: 16 }}>
+          <label style={{ fontWeight: 700 }}>Step 1 — Pick an ingredient</label>
+          {ingredientsLoading ? (
+            <p className="recipe-loading">Loading ingredients…</p>
+          ) : (
+            <>
+              <input
+                type="search"
+                className="supplier-input"
+                placeholder="Search ingredients (e.g. tomato, rice)…"
+                value={ingredientSearch}
+                onChange={(e) => setIngredientSearch(e.target.value)}
+                style={{ marginBottom: 6 }}
+              />
+              <div
+                style={{
+                  maxHeight: 200,
+                  overflowY: "auto",
+                  border: "1px solid #e6dccd",
+                  borderRadius: 6,
+                  background: "#fff",
+                }}
+              >
+                {filteredIngredients.length === 0 ? (
+                  <p style={{ padding: "8px 12px", margin: 0, color: "#888", fontSize: "0.85rem" }}>
+                    No ingredients match &ldquo;{ingredientSearch}&rdquo;.
+                  </p>
+                ) : (
+                  filteredIngredients.map((opt) => {
+                    const alreadyAdded = addedIngredients.some(
+                      (a) => a.ingredientId === opt.ingredientId && a.aliasId === opt.aliasId,
+                    );
+                    const isPicked = pickedIngredient?.value === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => pickIngredient(opt)}
+                        disabled={alreadyAdded}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          width: "100%",
+                          padding: "10px 12px",
+                          background: isPicked ? "#e07b39" : alreadyAdded ? "#f5f5f5" : "#fff",
+                          border: "none",
+                          borderBottom: "1px solid #f5ece0",
+                          cursor: alreadyAdded ? "not-allowed" : "pointer",
+                          color: isPicked ? "#fff" : alreadyAdded ? "#aaa" : "#333",
+                          fontSize: "0.9rem",
+                          textAlign: "left",
+                          fontWeight: isPicked ? 700 : 400,
+                          transition: "background 0.1s",
+                        }}
+                      >
+                        <span>{opt.label}</span>
+                        {alreadyAdded ? (
+                          <span style={{ color: "#27ae60", fontSize: "0.72rem", fontWeight: 600 }}>✓ already added</span>
+                        ) : isPicked ? (
+                          <span style={{ fontSize: "0.72rem" }}>✓ Selected</span>
+                        ) : null}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* STEP 2: confirm with quantity + unit */}
+        <div
+          style={{
+            background: pickedIngredient ? "#fff8f2" : "#f5f5f5",
+            border: `2px solid ${pickedIngredient ? "#e07b39" : "#ddd"}`,
+            borderRadius: 10,
+            padding: 16,
+            opacity: pickedIngredient ? 1 : 0.6,
+            transition: "all 0.15s",
+          }}
+        >
+          <div style={{ marginBottom: 10, fontWeight: 700 }}>
+            Step 2 — Set quantity for{" "}
+            {pickedIngredient ? (
+              <span style={{ color: "#b85a1f" }}>“{pickedIngredient.label}”</span>
             ) : (
-              <>
-                <input
-                  type="search"
-                  className="supplier-input"
-                  placeholder="Search ingredients (e.g. tomato, rice)…"
-                  value={ingredientSearch}
-                  onChange={(e) => setIngredientSearch(e.target.value)}
-                  style={{ marginBottom: 6 }}
-                />
-                <div
-                  style={{
-                    maxHeight: 160,
-                    overflowY: "auto",
-                    border: "1px solid #e6dccd",
-                    borderRadius: 6,
-                    background: "#fff",
-                  }}
-                >
-                  {filteredIngredients.length === 0 ? (
-                    <p style={{ padding: "8px 12px", margin: 0, color: "#888", fontSize: "0.85rem" }}>
-                      No ingredients match &ldquo;{ingredientSearch}&rdquo;.
-                    </p>
-                  ) : (
-                    filteredIngredients.map((opt) => {
-                      const alreadyAdded = addedIngredients.some(
-                        (a) => a.ingredientId === opt.ingredientId && a.aliasId === opt.aliasId,
-                      );
-                      const selected = selectedIngredientId === opt.value;
-                      return (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setSelectedIngredientId(opt.value)}
-                          disabled={alreadyAdded}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            width: "100%",
-                            padding: "6px 10px",
-                            background: selected ? "#fff0e3" : "transparent",
-                            border: "none",
-                            borderBottom: "1px solid #f5ece0",
-                            cursor: alreadyAdded ? "not-allowed" : "pointer",
-                            color: alreadyAdded ? "#aaa" : "#333",
-                            fontSize: "0.88rem",
-                            textAlign: "left",
-                          }}
-                        >
-                          <span>{opt.label}</span>
-                          {alreadyAdded && (
-                            <span style={{ color: "#27ae60", fontSize: "0.72rem" }}>✓ added</span>
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
-              </>
+              <span style={{ color: "#888", fontWeight: 400 }}>(pick an ingredient above first)</span>
             )}
           </div>
-          <div className="form-group" style={{ flex: 1 }}>
-            <label>Quantity *</label>
-            <input
-              type="number"
-              min={0.001}
-              step={0.001}
-              placeholder="200"
-              value={ingredientQty}
-              onChange={(e) => setIngredientQty(e.target.value)}
-              className="supplier-input"
-            />
-          </div>
-          <div className="form-group" style={{ flex: 1 }}>
-            <label>Unit *</label>
-            <select
-              value={ingredientUnit}
-              onChange={(e) => setIngredientUnit(e.target.value)}
-              className="supplier-select"
-            >
-              {UNITS.map((u) => (
-                <option key={u} value={u}>{u}</option>
-              ))}
-            </select>
-          </div>
-          <div className="form-group recipe-add-btn-wrap">
-            <label>&nbsp;</label>
+
+          <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <div className="form-group" style={{ flex: 1, minWidth: 120 }}>
+              <label>Quantity *</label>
+              <input
+                type="number"
+                min={0.001}
+                step={0.001}
+                placeholder="200"
+                value={ingredientQty}
+                onChange={(e) => setIngredientQty(e.target.value)}
+                className="supplier-input"
+                disabled={!pickedIngredient}
+              />
+            </div>
+            <div className="form-group" style={{ flex: 1, minWidth: 100 }}>
+              <label>Unit *</label>
+              <select
+                value={ingredientUnit}
+                onChange={(e) => setIngredientUnit(e.target.value)}
+                className="supplier-select"
+                disabled={!pickedIngredient}
+              >
+                {UNITS.map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+            </div>
             <button
               type="button"
-              className="btn btn-secondary"
-              onClick={addIngredient}
-              disabled={ingredientsLoading || !availableIngredients.length}
+              className="btn btn-primary"
+              onClick={addPickedIngredient}
+              disabled={!pickedIngredient || !ingredientQty}
+              style={{ minWidth: 160 }}
             >
-              + Add
+              + Add to Recipe
             </button>
           </div>
         </div>

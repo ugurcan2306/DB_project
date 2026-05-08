@@ -8,6 +8,7 @@ type AdminUser = {
   email: string;
   role: string;
   is_active: boolean;
+  balance: string;
   created_at: string;
   chef_verified: boolean | null;
 };
@@ -19,6 +20,7 @@ export function AdminUsersClient() {
   const [roleFilter, setRoleFilter] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [balanceDraft, setBalanceDraft] = useState<Record<string, string>>({});
 
   async function loadUsers(role: string) {
     const url = role ? `/api/admin/users?role=${role}` : "/api/admin/users";
@@ -62,6 +64,37 @@ export function AdminUsersClient() {
       return;
     }
     setMessage(`${user.full_name} ${user.is_active ? "deactivated" : "activated"}.`);
+    await loadUsers(roleFilter);
+  }
+
+  async function saveBalance(user: AdminUser) {
+    setError(null);
+    setMessage(null);
+    const raw = balanceDraft[user.id];
+    if (raw === undefined || raw === "") {
+      setError("Enter a balance amount.");
+      return;
+    }
+    const amount = Number(raw);
+    if (!Number.isFinite(amount) || amount < 0) {
+      setError("Balance must be 0 or higher.");
+      return;
+    }
+    const res = await fetch(`/api/admin/users/${user.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ balance: amount }),
+    });
+    if (!res.ok) {
+      setError("Failed to update balance.");
+      return;
+    }
+    setMessage(`${user.full_name}'s balance set to $${amount.toFixed(2)}.`);
+    setBalanceDraft((prev) => {
+      const next = { ...prev };
+      delete next[user.id];
+      return next;
+    });
     await loadUsers(roleFilter);
   }
 
@@ -114,6 +147,7 @@ export function AdminUsersClient() {
                 <th>Email</th>
                 <th>Role</th>
                 <th>Status</th>
+                <th>Balance</th>
                 <th>Chef Verified</th>
                 <th>Joined</th>
                 <th>Actions</th>
@@ -129,6 +163,31 @@ export function AdminUsersClient() {
                     <span className={user.is_active ? "status-active" : "status-inactive"}>
                       {user.is_active ? "Active" : "Inactive"}
                     </span>
+                  </td>
+                  <td>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <span style={{ minWidth: 60, fontWeight: 600 }}>${Number(user.balance).toFixed(2)}</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        className="supplier-input"
+                        style={{ width: 80, padding: "4px 6px", fontSize: "0.82rem" }}
+                        placeholder="set"
+                        value={balanceDraft[user.id] ?? ""}
+                        onChange={(e) =>
+                          setBalanceDraft((prev) => ({ ...prev, [user.id]: e.target.value }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary supplier-action-btn"
+                        disabled={balanceDraft[user.id] === undefined || balanceDraft[user.id] === ""}
+                        onClick={() => saveBalance(user)}
+                      >
+                        Save
+                      </button>
+                    </div>
                   </td>
                   <td>
                     {user.role === "verified_chef"
@@ -158,7 +217,7 @@ export function AdminUsersClient() {
               ))}
               {!users.length ? (
                 <tr>
-                  <td colSpan={7}>No users found.</td>
+                  <td colSpan={8}>No users found.</td>
                 </tr>
               ) : null}
             </tbody>
