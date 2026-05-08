@@ -1,7 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
+
+const DIETARY_TAGS = [
+  { value: "vegan", label: "Vegan" },
+  { value: "vegetarian", label: "Vegetarian" },
+  { value: "keto", label: "Keto" },
+  { value: "gluten_free", label: "Gluten-Free" },
+  { value: "dairy_free", label: "Dairy-Free" },
+  { value: "nut_free", label: "Nut-Free" },
+  { value: "halal", label: "Halal" },
+  { value: "paleo", label: "Paleo" },
+];
+const DIFFICULTIES = ["easy", "medium", "hard"];
+const TIME_OPTIONS = [
+  { label: "Any", value: 0 },
+  { label: "≤ 15 min", value: 15 },
+  { label: "≤ 30 min", value: 30 },
+  { label: "≤ 60 min", value: 60 },
+  { label: "≤ 90 min", value: 90 },
+];
+const RATING_OPTIONS = [
+  { label: "Any", value: 0 },
+  { label: "2★+", value: 2 },
+  { label: "3★+", value: 3 },
+  { label: "4★+", value: 4 },
+  { label: "5★", value: 5 },
+];
 
 type MealList = {
   id: string;
@@ -23,6 +49,7 @@ type RecipeInList = {
   author_name: string;
   is_deleted: boolean;
   user_rating: number | null;
+  author_avg_rating: number | null;
   steps: { step_number: number; instruction: string }[];
   ingredients: { ingredient_name: string; quantity: number; unit: string }[];
 };
@@ -44,6 +71,45 @@ export function MealListsClient() {
   const [awaitingRating, setAwaitingRating] = useState<Record<string, boolean>>({});
   const [pendingRating, setPendingRating] = useState<Record<string, number>>({});
   const [submittingCook, setSubmittingCook] = useState<string | null>(null);
+
+  // Filter state (applies to the currently expanded list)
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [filterDifficulty, setFilterDifficulty] = useState<string[]>([]);
+  const [filterMaxTime, setFilterMaxTime] = useState(0);
+  const [filterIngredient, setFilterIngredient] = useState("");
+  const [filterMinRating, setFilterMinRating] = useState(0);
+
+  const filteredListRecipes = useMemo(() => {
+    const base = expandedId ? (listRecipes[expandedId] ?? []) : [];
+    return base.filter((r) => {
+      if (filterTags.length > 0 && !filterTags.every((t) => r.dietary_tags.includes(t))) return false;
+      if (filterDifficulty.length > 0 && !filterDifficulty.includes(r.difficulty)) return false;
+      if (filterMaxTime > 0 && r.cooking_time_minutes > filterMaxTime) return false;
+      if (filterIngredient.trim()) {
+        const term = filterIngredient.trim().toLowerCase();
+        if (!r.ingredients.some((i) => i.ingredient_name.toLowerCase().includes(term))) return false;
+      }
+      if (filterMinRating > 0) {
+        if (r.author_avg_rating == null || r.author_avg_rating < filterMinRating) return false;
+      }
+      return true;
+    });
+  }, [listRecipes, expandedId, filterTags, filterDifficulty, filterMaxTime, filterIngredient, filterMinRating]);
+
+  function toggleTag(val: string) {
+    setFilterTags((prev) => prev.includes(val) ? prev.filter((t) => t !== val) : [...prev, val]);
+  }
+  function toggleDifficulty(val: string) {
+    setFilterDifficulty((prev) => prev.includes(val) ? prev.filter((d) => d !== val) : [...prev, val]);
+  }
+  function clearFilters() {
+    setFilterTags([]);
+    setFilterDifficulty([]);
+    setFilterMaxTime(0);
+    setFilterIngredient("");
+    setFilterMinRating(0);
+  }
+  const isFiltered = filterTags.length > 0 || filterDifficulty.length > 0 || filterMaxTime > 0 || filterIngredient.trim() || filterMinRating > 0;
 
   useEffect(() => {
     fetch("/api/meal-lists")
@@ -222,7 +288,110 @@ export function MealListsClient() {
                   </p>
                 ) : (
                   <div>
-                    {listRecipes[list.id].map((recipe) => (
+                    {/* Filter bar */}
+                    <div className="filter-section" style={{ marginBottom: "1rem" }}>
+                      <div className="filter-row">
+                        <div className="filter-group">
+                          <span className="filter-label">Dietary Tags</span>
+                          <div className="chip-group">
+                            {DIETARY_TAGS.map((tag) => (
+                              <button
+                                key={tag.value}
+                                type="button"
+                                className={`chip${filterTags.includes(tag.value) ? " active" : ""}`}
+                                onClick={() => toggleTag(tag.value)}
+                              >
+                                {tag.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <span className="filter-label">Difficulty</span>
+                          <div className="chip-group">
+                            {DIFFICULTIES.map((d) => (
+                              <button
+                                key={d}
+                                type="button"
+                                className={`chip${filterDifficulty.includes(d) ? " active" : ""}`}
+                                onClick={() => toggleDifficulty(d)}
+                              >
+                                {d.charAt(0).toUpperCase() + d.slice(1)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <span className="filter-label">Max Cook Time</span>
+                          <div className="chip-group">
+                            {TIME_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                className={`chip${filterMaxTime === opt.value ? " active" : ""}`}
+                                onClick={() => setFilterMaxTime(opt.value)}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <span className="filter-label">Min Chef Rating</span>
+                          <div className="chip-group">
+                            {RATING_OPTIONS.map((opt) => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                className={`chip${filterMinRating === opt.value ? " active" : ""}`}
+                                onClick={() => setFilterMinRating(opt.value)}
+                              >
+                                {opt.label}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="filter-group">
+                          <span className="filter-label">Ingredient</span>
+                          <div className="filter-ingredient-row">
+                            <span className="filter-ingredient-icon">🔍</span>
+                            <input
+                              type="text"
+                              placeholder="Search by ingredient…"
+                              value={filterIngredient}
+                              onChange={(e) => setFilterIngredient(e.target.value)}
+                              className="filter-ingredient-input"
+                            />
+                            {filterIngredient && (
+                              <button
+                                type="button"
+                                className="filter-ingredient-clear"
+                                onClick={() => setFilterIngredient("")}
+                                aria-label="Clear ingredient filter"
+                              >
+                                ×
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="filter-footer">
+                        <span className="filter-count">
+                          {filteredListRecipes.length} of {listRecipes[list.id].length} recipe{listRecipes[list.id].length === 1 ? "" : "s"}
+                        </span>
+                        {isFiltered && (
+                          <button type="button" className="btn btn-secondary" onClick={clearFilters}>
+                            Clear Filters
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {filteredListRecipes.length === 0 ? (
+                      <p style={{ fontSize: "0.9rem", color: "#999" }}>No recipes match the selected filters.</p>
+                    ) : null}
+
+                    {filteredListRecipes.map((recipe) => (
                       <div key={recipe.id} style={{ border: "1px solid #e5e7eb", borderRadius: 6, padding: "0.85rem", marginBottom: "0.75rem" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                           <div style={{ flex: 1 }}>

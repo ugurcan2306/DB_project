@@ -15,7 +15,11 @@ export async function GET() {
             u.full_name AS author_name,
             EXISTS (
               SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.followed_id = u.id
-            ) AS is_following_author
+            ) AS is_following_author,
+            (SELECT ROUND(AVG(cl.rating)::numeric, 1)
+             FROM cook_logs cl
+             JOIN recipes r2 ON r2.id = cl.recipe_id
+             WHERE r2.author_id = u.id) AS author_avg_rating
      FROM recipes r
      JOIN users u ON u.id = r.author_id
      WHERE r.is_published = TRUE

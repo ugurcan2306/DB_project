@@ -210,14 +210,26 @@ export function MyRecipesClient({ userRole }: { userRole: string }) {
 
               <div className="filter-group">
                 <span className="filter-label">Ingredient</span>
-                <input
-                  type="text"
-                  placeholder="Search by ingredient…"
-                  value={filterIngredient}
-                  onChange={(e) => setFilterIngredient(e.target.value)}
-                  className="supplier-input"
-                  style={{ maxWidth: 220 }}
-                />
+                <div className="filter-ingredient-row">
+                  <span className="filter-ingredient-icon">🔍</span>
+                  <input
+                    type="text"
+                    placeholder="Search by ingredient…"
+                    value={filterIngredient}
+                    onChange={(e) => setFilterIngredient(e.target.value)}
+                    className="filter-ingredient-input"
+                  />
+                  {filterIngredient && (
+                    <button
+                      type="button"
+                      className="filter-ingredient-clear"
+                      onClick={() => setFilterIngredient("")}
+                      aria-label="Clear ingredient filter"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
