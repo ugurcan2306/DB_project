@@ -19,7 +19,9 @@ export async function GET() {
             (SELECT ROUND(AVG(cl.rating)::numeric, 1)
              FROM cook_logs cl
              JOIN recipes r2 ON r2.id = cl.recipe_id
-             WHERE r2.author_id = u.id) AS author_avg_rating
+             WHERE r2.author_id = u.id) AS author_avg_rating,
+            (SELECT cl.rating FROM cook_logs cl
+             WHERE cl.recipe_id = r.id AND cl.user_id = $1) AS my_rating
      FROM recipes r
      JOIN users u ON u.id = r.author_id
      WHERE r.is_published = TRUE

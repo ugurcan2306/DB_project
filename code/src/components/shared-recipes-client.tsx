@@ -40,6 +40,7 @@ type SharedRecipe = {
   author_id: string;
   author_name: string;
   author_avg_rating: number | null;
+  my_rating: number | null;
   is_following_author: boolean;
   created_at: string;
   steps: { step_number: number; instruction: string }[];
@@ -80,6 +81,11 @@ export function SharedRecipesClient() {
   const [purchaseInfo, setPurchaseInfo] = useState<Record<string, string>>({});
   const [quotes, setQuotes] = useState<Record<string, RecipeQuote>>({});
   const [followBusy, setFollowBusy] = useState<string | null>(null);
+
+  // Cook-log / review state, keyed by recipe id
+  const [cookLogRating, setCookLogRating] = useState<Record<string, number>>({});
+  const [cookLogBusy, setCookLogBusy] = useState<string | null>(null);
+  const [cookLogInfo, setCookLogInfo] = useState<Record<string, string>>({});
 
   // Filter state
   const [filterTags, setFilterTags] = useState<string[]>([]);
@@ -316,6 +322,40 @@ export function SharedRecipesClient() {
       }));
     } finally {
       setBuying(null);
+    }
+  }
+
+  async function submitCookLog(recipe: SharedRecipe) {
+    const rating = cookLogRating[recipe.id];
+    if (!rating) return;
+    const wasUpdate = recipe.my_rating != null;
+    setCookLogBusy(recipe.id);
+    try {
+      const res = await fetch("/api/cook-logs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipeId: recipe.id, rating }),
+      });
+      const data = (await res.json()) as { error?: string; challengesAdvanced?: string[] };
+      if (!res.ok) {
+        setCookLogInfo((prev) => ({ ...prev, [recipe.id]: data.error ?? "Could not submit cook log." }));
+        return;
+      }
+      const advanced = data.challengesAdvanced?.length ?? 0;
+      const verb = wasUpdate ? "updated" : "saved";
+      setCookLogInfo((prev) => ({
+        ...prev,
+        [recipe.id]:
+          advanced > 0
+            ? `Cook log ${verb} (${rating}★) — ${advanced} challenge${advanced === 1 ? "" : "s"} advanced.`
+            : `Cook log ${verb} (${rating}★).`,
+      }));
+      // Reflect the new rating in local state so the UI shows "you rated this".
+      setRecipes((prev) =>
+        prev.map((r) => (r.id === recipe.id ? { ...r, my_rating: rating } : r)),
+      );
+    } finally {
+      setCookLogBusy(null);
     }
   }
 
@@ -564,6 +604,81 @@ export function SharedRecipesClient() {
                         {quote.shortages.map((s) => `${s.ingredientName} (${s.available}/${s.required} ${s.unit})`).join(", ")}
                       </p>
                     )}
+
+                    {/* Cook log / review */}
+                    {(() => {
+                      const myRating = recipe.my_rating ?? 0;
+                      const draft = cookLogRating[recipe.id] ?? myRating;
+                      return (
+                        <div
+                          style={{
+                            marginTop: 16,
+                            padding: "12px 14px",
+                            background: "#fff8f2",
+                            border: "1px solid #f0d4b4",
+                            borderRadius: 10,
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                            <strong>📝 I cooked this</strong>
+                            {myRating > 0 ? (
+                              <span style={{ color: "#27ae60", fontSize: "0.85rem", fontWeight: 600 }}>
+                                ✓ You rated this {myRating}★ — pick a new score to update.
+                              </span>
+                            ) : (
+                              <span style={{ color: "#666", fontSize: "0.85rem" }}>
+                                — rate it to log your cook:
+                              </span>
+                            )}
+                            {[1, 2, 3, 4, 5].map((n) => {
+                              const active = draft >= n;
+                              return (
+                                <button
+                                  key={n}
+                                  type="button"
+                                  onClick={() =>
+                                    setCookLogRating((prev) => ({ ...prev, [recipe.id]: n }))
+                                  }
+                                  style={{
+                                    background: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    fontSize: "1.4rem",
+                                    color: active ? "#e07b39" : "#ddd",
+                                    padding: 0,
+                                  }}
+                                  aria-label={`Rate ${n} stars`}
+                                >
+                                  ★
+                                </button>
+                              );
+                            })}
+                            <button
+                              type="button"
+                              className="btn btn-primary"
+                              style={{ marginLeft: "auto" }}
+                              onClick={() => submitCookLog(recipe)}
+                              disabled={
+                                cookLogBusy === recipe.id ||
+                                draft === 0 ||
+                                draft === myRating
+                              }
+                            >
+                              {cookLogBusy === recipe.id
+                                ? "Saving…"
+                                : myRating > 0
+                                  ? "Update Cook Log"
+                                  : "Submit Cook Log"}
+                            </button>
+                          </div>
+                          {cookLogInfo[recipe.id] ? (
+                            <p className="ok-text" style={{ marginTop: 8, marginBottom: 0 }}>
+                              {cookLogInfo[recipe.id]}
+                            </p>
+                          ) : null}
+                        </div>
+                      );
+                    })()}
 
                     {/* Add to list */}
                     {lists.length === 0 ? (
