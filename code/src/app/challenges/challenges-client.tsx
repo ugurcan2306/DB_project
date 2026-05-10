@@ -35,7 +35,6 @@ export function ChallengesClient({
   isAdmin?: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("active");
-  const [logging, setLogging] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const router = useRouter();
@@ -64,12 +63,6 @@ export function ChallengesClient({
   }
   async function leave(id: string) {
     if (await call(`/api/challenges/${id}/leave`)) refresh();
-  }
-  async function logRecipe(id: string, recipe: string, tags: string, ingredients: string): Promise<void> {
-    if (await call(`/api/challenges/${id}/log`, { recipeTitle: recipe, tags, ingredients })) {
-      setLogging(null);
-      refresh();
-    }
   }
 
   return (
@@ -138,10 +131,6 @@ export function ChallengesClient({
               key={c.id}
               c={c}
               onLeave={() => leave(c.id)}
-              onOpenLog={() => setLogging(c.id)}
-              isLogging={logging === c.id}
-              onSubmitLog={(r, t, i) => logRecipe(c.id, r, t, i)}
-              onCloseLog={() => setLogging(null)}
               busy={pending}
             />
           ))}
@@ -291,35 +280,13 @@ function ChallengeCard({
 function JoinedCard({
   c,
   onLeave,
-  onOpenLog,
-  isLogging,
-  onSubmitLog,
-  onCloseLog,
   busy,
 }: {
   c: UserChallengeRow;
   onLeave: () => void;
-  onOpenLog: () => void;
-  isLogging: boolean;
-  onSubmitLog: (recipe: string, tags: string, ingredients: string) => Promise<void>;
-  onCloseLog: () => void;
   busy: boolean;
 }) {
-  const [recipe, setRecipe] = useState("");
-  const [tags, setTags] = useState(c.required_tag ?? "");
-  const [ingredients, setIngredients] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const pct = Math.min(100, Math.round((c.progress_count / c.target_count) * 100));
-
-  async function handleSubmit() {
-    if (submitting || !recipe.trim()) return;
-    setSubmitting(true);
-    try {
-      await onSubmitLog(recipe, tags, ingredients);
-    } finally {
-      setSubmitting(false);
-    }
-  }
 
   return (
     <div className="challenge-card">
@@ -349,54 +316,12 @@ function JoinedCard({
             🎁 {c.badge_emoji} {c.badge_name} · +{c.reward_points} pts
           </div>
         ) : null}
-
-        {isLogging ? (
-          <div className="log-form">
-            <input
-              placeholder="Recipe title"
-              value={recipe}
-              onChange={(e) => setRecipe(e.target.value)}
-            />
-            <input
-              placeholder={`Tags (comma-separated, e.g. "${c.required_tag ?? "vegan, quick"}")`}
-              value={tags}
-              onChange={(e) => setTags(e.target.value)}
-            />
-            <input
-              placeholder="Ingredients (optional)"
-              value={ingredients}
-              onChange={(e) => setIngredients(e.target.value)}
-            />
-            <div className="log-actions">
-              <button
-                className="btn btn-primary"
-                disabled={submitting || busy || !recipe.trim()}
-                onClick={handleSubmit}
-              >
-                {submitting ? "Logging…" : "Log Recipe"}
-              </button>
-              <button className="btn btn-secondary" onClick={onCloseLog} disabled={submitting || busy}>
-                Cancel
-              </button>
-            </div>
-            {c.required_tag ? (
-              <p className="log-hint">
-                Tip: include <code>{c.required_tag}</code> in tags for the recipe to count toward this challenge.
-              </p>
-            ) : null}
-          </div>
-        ) : null}
       </div>
-      {!isLogging ? (
-        <div className="card-actions">
-          <button className="btn btn-primary" onClick={onOpenLog} disabled={busy}>
-            + Log Recipe
-          </button>
-          <button className="btn btn-secondary" onClick={onLeave} disabled={busy}>
-            Leave
-          </button>
-        </div>
-      ) : null}
+      <div className="card-actions">
+        <button className="btn btn-secondary" onClick={onLeave} disabled={busy}>
+          Leave
+        </button>
+      </div>
     </div>
   );
 }
